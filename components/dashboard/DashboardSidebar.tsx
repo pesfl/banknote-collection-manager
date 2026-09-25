@@ -13,9 +13,9 @@ export default function DashboardSidebar({ open }: DashboardSidebarProps) {
 
   const menuItems = [
     { href: '/banknotes', label: 'Collection', icon: '📚' },
-    { href: '/dashboard/valuation', label: 'Valuation', icon: '💰' },
-    { href: '/dashboard/analytics', label: 'Analytics', icon: '📊' },
-    { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
+    { href: '/valuation', label: 'Valuation', icon: '💰' },
+    { href: '/analytics', label: 'Analytics', icon: '📊' },
+    { href: '/settings', label: 'Settings', icon: '⚙️' },
   ];
 
   return (
