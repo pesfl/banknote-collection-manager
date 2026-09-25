@@ -11,7 +11,7 @@ export default function Home() {
 
     // Redirect authenticated users to dashboard, others to capture
     if (session) {
-      window.location.href = '/banknotes';
+      window.location.href = '/dashboard/banknotes';
     } else {
       window.location.href = '/capture';
     }

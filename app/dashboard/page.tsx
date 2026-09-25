@@ -22,21 +22,21 @@ export default function DashboardHome() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
-            href: '/banknotes',
+            href: '/dashboard/banknotes',
             title: 'Collection',
             description: 'View and manage your specimens',
             icon: '📚',
             color: 'from-blue-500 to-blue-600',
           },
           {
-            href: '/valuation',
+            href: '/dashboard/valuation',
             title: 'Valuation',
             description: 'Multi-source price tracking',
             icon: '💰',
             color: 'from-green-500 to-green-600',
           },
           {
-            href: '/analytics',
+            href: '/dashboard/analytics',
             title: 'Analytics',
             description: 'Portfolio insights & trends',
             icon: '📊',
