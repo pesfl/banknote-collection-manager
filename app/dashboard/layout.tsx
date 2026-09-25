@@ -1,8 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
+
+const DashboardHeader = dynamic(() => import('@/components/dashboard/DashboardHeader'), {
+  ssr: false,
+});
+
+export const dynamic = 'force-dynamic';
 
 export default function DashboardLayout({
   children,
