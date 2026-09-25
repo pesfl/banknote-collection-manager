@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 
+export const dynamic = 'force-dynamic';
+
 export default function DashboardHome() {
   const { data: session } = useSession();
 
