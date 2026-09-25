@@ -1,4 +1,4 @@
-# 🏦 Banknote Collection Manager
+# 🏦 Banknote Collection Manager- Micheal
 
 **Specimen-Level Banknote Collection Management & AI Multi-Source Valuation System**
 
