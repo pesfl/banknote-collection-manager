@@ -145,8 +145,8 @@ function SpecimenDetailModal({
 
         {/* Title */}
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 pr-8">
-          {specimen.extractedData?.country || 'Unknown'} •{' '}
-          {specimen.extractedData?.denomination || '—'}
+          {specimen.extraction?.countryOfOrigin || 'Unknown'} •{' '}
+          {specimen.extraction?.denomination || '—'}
         </h2>
 
         {/* Images */}
@@ -194,10 +194,10 @@ function SpecimenDetailModal({
           {specimen.notes && (
             <DetailRow label="Notes" value={specimen.notes} isLong />
           )}
-          {specimen.extractedData?.pickNumber && (
+          {specimen.extraction?.pickNumber && (
             <DetailRow
               label="Pick #"
-              value={specimen.extractedData.pickNumber}
+              value={specimen.extraction.pickNumber}
             />
           )}
         </div>

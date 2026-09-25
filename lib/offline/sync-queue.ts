@@ -134,7 +134,7 @@ export class SyncQueueManager {
       formData.append('frontImage', specimen.frontImageBlob);
       formData.append('backImage', specimen.backImageBlob);
       if (specimen.notes) formData.append('notes', specimen.notes);
-      formData.append('capturedAt', specimen.capturedAt.toISOString());
+      formData.append('capturedAt', new Date(specimen.capturedAt).toISOString());
 
       const response = await fetch('/api/capture', {
         method: 'POST',

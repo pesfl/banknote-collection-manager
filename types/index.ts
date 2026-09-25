@@ -21,6 +21,35 @@ export const FancySerialTypeEnum = z.enum([
 ]);
 export type FancySerialType = z.infer<typeof FancySerialTypeEnum>;
 
+// AI Extraction Schema (used by LocalSpecimen)
+export const AIExtractionSchema = z.object({
+  countryOfOrigin: z.string().default('Unknown'),
+  denomination: z.string().default('Unknown'),
+  currency: z.string().default('Unknown'),
+  pickNumber: z.string().optional(),
+  issueYear: z.string().optional(),
+  seriesDate: z.string().optional(),
+  fullSerialNumber: z.string().optional(),
+  serialPrefix: z.string().optional(),
+  serialNumeric: z.string().optional(),
+  serialSuffix: z.string().optional(),
+  signature1Name: z.string().optional(),
+  signature1Title: z.string().optional(),
+  signature2Name: z.string().optional(),
+  signature2Title: z.string().optional(),
+  watermarks: z.string().optional(),
+  securityFeatures: z.string().optional(),
+  conditionGrade: BanknoteGradeEnum.optional(),
+  machineEstimatedGrade: BanknoteGradeEnum.optional(),
+  fancySerialType: FancySerialTypeEnum.optional(),
+  isReplacementNote: z.boolean().default(false),
+  errorType: z.string().optional(),
+  defectsAndAnomalies: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export type AIExtraction = z.infer<typeof AIExtractionSchema>;
+
 // Core Banknote Schema
 export const BanknoteSchema = z.object({
   id: z.string().optional(),
@@ -184,38 +213,6 @@ export const SyncStatusResponseSchema = z.object({
 });
 
 export type SyncStatusResponse = z.infer<typeof SyncStatusResponseSchema>;
-
-// ============================================================================
-// AI EXTRACTION TYPES
-// ============================================================================
-
-export const AIExtractionSchema = z.object({
-  countryOfOrigin: z.string().default('Unknown'),
-  denomination: z.string().default('Unknown'),
-  currency: z.string().default('Unknown'),
-  pickNumber: z.string().optional(),
-  issueYear: z.string().optional(),
-  seriesDate: z.string().optional(),
-  fullSerialNumber: z.string().optional(),
-  serialPrefix: z.string().optional(),
-  serialNumeric: z.string().optional(),
-  serialSuffix: z.string().optional(),
-  signature1Name: z.string().optional(),
-  signature1Title: z.string().optional(),
-  signature2Name: z.string().optional(),
-  signature2Title: z.string().optional(),
-  watermarks: z.string().optional(),
-  securityFeatures: z.string().optional(),
-  conditionGrade: BanknoteGradeEnum.optional(),
-  machineEstimatedGrade: BanknoteGradeEnum.optional(),
-  fancySerialType: FancySerialTypeEnum.optional(),
-  isReplacementNote: z.boolean().default(false),
-  errorType: z.string().optional(),
-  defectsAndAnomalies: z.string().optional(),
-  notes: z.string().optional(),
-});
-
-export type AIExtraction = z.infer<typeof AIExtractionSchema>;
 
 // ============================================================================
 // VALUATION TYPES

@@ -13,8 +13,8 @@ export default function InventoryCard({ specimen, onClick }: InventoryCardProps)
     ? URL.createObjectURL(specimen.frontImageBlob)
     : null;
 
-  const country = specimen.extractedData?.country || 'Unknown';
-  const denomination = specimen.extractedData?.denomination || '—';
+  const country = specimen.extraction?.countryOfOrigin || 'Unknown';
+  const denomination = specimen.extraction?.denomination || '—';
   const capturedDate = new Date(specimen.capturedAt);
   const timeAgo = getTimeAgo(capturedDate);
 

@@ -80,7 +80,7 @@ export function useBanknoteCapture(): UseBanknoteCaptureReturn {
           id: `sp_local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           frontImageBlob: compressedFront,
           backImageBlob: compressedBack,
-          capturedAt: new Date(),
+          capturedAt: Date.now(),
           syncStatus: 'pending',
           notes,
           syncRetryCount: 0,
