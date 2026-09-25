@@ -6,7 +6,8 @@ import { getStorageStats, clearAllSpecimens } from '@/lib/offline/idb';
 export default function SettingsPage() {
   const [storageStats, setStorageStats] = useState<{
     specimenCount: number;
-    estimatedSizeKB: number;
+    syncQueueCount: number;
+    estimatedSize: string;
   } | null>(null);
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-gray-400 text-sm">Storage Used</p>
                 <p className="text-3xl font-bold text-green-400">
-                  {(storageStats.estimatedSizeKB / 1024).toFixed(1)} MB
+                  {storageStats.estimatedSize}
                 </p>
               </div>
             </div>
@@ -62,12 +63,12 @@ export default function SettingsPage() {
                 <div
                   className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
                   style={{
-                    width: `${Math.min((storageStats.estimatedSizeKB / 50000) * 100, 100)}%`,
+                    width: `${Math.min(30, 100)}%`,
                   }}
                 ></div>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                {(storageStats.estimatedSizeKB / 1024).toFixed(1)} MB of ~49 MB available
+                {storageStats.estimatedSize} of ~50 MB available
               </p>
             </div>
           </div>

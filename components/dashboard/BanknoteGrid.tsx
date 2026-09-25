@@ -43,7 +43,8 @@ export default function BanknoteGrid({
     filtered = filtered.filter(
       s =>
         s.extraction?.denomination?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.extraction?.countryOfOrigin?.toLowerCase().includes(searchQuery.toLowerCase())
+        s.extraction?.countryOfOrigin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.notes?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }
 
@@ -134,22 +135,22 @@ export default function BanknoteGrid({
               </div>
 
               {/* Images */}
-              {selectedSpecimen.frontImage && (
+              {selectedSpecimen.frontImageBlob && (
                 <div className="space-y-2">
                   <p className="text-xs text-gray-400">Front</p>
                   <img
-                    src={URL.createObjectURL(selectedSpecimen.frontImage)}
+                    src={URL.createObjectURL(selectedSpecimen.frontImageBlob)}
                     alt="Front"
                     className="w-full h-32 object-cover rounded-lg"
                   />
                 </div>
               )}
 
-              {selectedSpecimen.backImage && (
+              {selectedSpecimen.backImageBlob && (
                 <div className="space-y-2">
                   <p className="text-xs text-gray-400">Back</p>
                   <img
-                    src={URL.createObjectURL(selectedSpecimen.backImage)}
+                    src={URL.createObjectURL(selectedSpecimen.backImageBlob)}
                     alt="Back"
                     className="w-full h-32 object-cover rounded-lg"
                   />

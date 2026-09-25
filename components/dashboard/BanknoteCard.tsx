@@ -10,11 +10,11 @@ interface BanknoteCardProps {
 
 export default function BanknoteCard({ specimen, onClick }: BanknoteCardProps) {
   const displayImage = useMemo(() => {
-    if (specimen.frontImage) {
-      return URL.createObjectURL(specimen.frontImage);
+    if (specimen.frontImageBlob) {
+      return URL.createObjectURL(specimen.frontImageBlob);
     }
     return null;
-  }, [specimen.frontImage]);
+  }, [specimen.frontImageBlob]);
 
   const relativeTime = useMemo(() => {
     const now = Date.now();

@@ -114,20 +114,17 @@ export type CaptureResponse = z.infer<typeof CaptureResponseSchema>;
 // ============================================================================
 
 export const LocalSpecimenSchema = z.object({
-  id: z.string(), // e.g., "sp_local_1726934400000"
+  id: z.string(),
   frontImageBlob: z.instanceof(Blob),
   backImageBlob: z.instanceof(Blob),
-  capturedAt: z.date(),
+  capturedAt: z.number(),
   syncStatus: z.enum(['pending', 'syncing', 'synced', 'failed']),
-  extractedData: z.object({
-    country: z.string().optional(),
-    denomination: z.string().optional(),
-    pickNumber: z.string().optional(),
-  }).optional(),
+  extraction: AIExtractionSchema.optional(),
   notes: z.string().optional(),
   serverId: z.string().optional(),
   lastSyncAttempt: z.date().optional(),
   syncRetryCount: z.number().default(0),
+  estimatedValue: z.number().optional(),
 });
 
 export type LocalSpecimen = z.infer<typeof LocalSpecimenSchema>;
