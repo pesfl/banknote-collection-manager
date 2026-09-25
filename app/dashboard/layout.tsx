@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import dynamic from 'next/dynamic';
+import dynamicImport from 'next/dynamic';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 
-const DashboardHeader = dynamic(() => import('@/components/dashboard/DashboardHeader'), {
+const DashboardHeader = dynamicImport(() => import('@/components/dashboard/DashboardHeader'), {
   ssr: false,
 });
 
