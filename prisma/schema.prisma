@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// AUTHENTICATION & USERS
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(COLLECTOR)
+
+  accounts      Account[]
+  sessions      Session[]
+  banknotes     Banknote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  COLLECTOR
+  VIEWER
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================================
+// BANKNOTE SPECIMENS (INVENTORY)
+// ============================================================================
+
+model Banknote {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Catalog Identity
+  countryOfOrigin String?
+  denomination    String?
+  currency        String?
+  pickNumber      String?
+  issueYear       String?
+  seriesDate      String?
+
+  // Physical Specimen Data
+  fullSerialNumber   String?
+  serialPrefix       String?
+  serialNumeric      String?
+  serialSuffix       String?
+
+  // Grading & Condition
+  conditionGrade     String?  // UNC, AU, XF, VF, F, VG, G
+  machineEstimatedGrade String?
+
+  // Special Classifications
+  fancySerialType    String?  // Solid, Radar, Ladder, Binary, etc.
+  isReplacementNote  Boolean  @default(false)
+  errorType          String?
+
+  // Storage Location
+  storageBox         String?
+  storageSection     String?
+  storagePosition    String?
+
+  // Images (S3 URLs)
+  frontImageUrl      String?
+  backImageUrl       String?
+  displayImageUrl    String?  // Combined front-over-back preview
+
+  // Signatures
+  signature1Name     String?
+  signature1Title    String?
+  signature2Name     String?
+  signature2Title    String?
+
+  // Watermarks & Security
+  watermarks         String?  @db.Text
+  securityFeatures   String?  @db.Text
+
+  // Notes & Anomalies
+  notes              String?  @db.Text
+  defectsAndAnomalies String? @db.Text
+
+  // AI Extraction Status
+  extractionStatus   ExtractionStatus @default(PENDING)
+  extractionData     Json?
+
+  // Valuation Data
+  numistaPmgValue    String?
+  collectorMarketValue String?
+  valuationStatus    ValuationStatus @default(PENDING)
+
+  // Acquisition
+  acquisitionDate    DateTime?
+  acquisitionSource  String?
+  purchasePrice      Float?
+
+  // Sync & Metadata
+  syncStatus         SyncStatus @default(PENDING)
+  syncedAt           DateTime?
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relations
+  extractionLogs     ExtractionLog[]
+  valuationLogs      ValuationLog[]
+
+  @@index([userId])
+  @@index([pickNumber])
+  @@index([countryOfOrigin])
+  @@index([syncStatus])
+  @@index([extractionStatus])
+  @@map("banknotes")
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ValuationStatus {
+  PENDING
+  COMPLETED
+  CONFLICT
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+// ============================================================================
+// AI EXTRACTION LOGS
+// ============================================================================
+
+model ExtractionLog {
+  id            String   @id @default(cuid())
+  banknoteId    String
+  banknote      Banknote @relation(fields: [banknoteId], references: [id], onDelete: Cascade)
+
+  status        String   // success, failed, retrying
+  extractedData Json?
+  errorMessage  String?
+
+  attemptCount  Int      @default(1)
+  processingTime Int?    // milliseconds
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([banknoteId])
+  @@map("extraction_logs")
+}
+
+// ============================================================================
+// VALUATION EVIDENCE MATRIX
+// ============================================================================
+
+model EvidenceMatrix {
+  id            String   @id @default(cuid())
+
+  pmgValue      String?
+  heritageValue String?
+  stacksBowersValue String?
+  ebayValue     String?
+  numistaValue  String?
+  banknoteArchivesValue String?
+
+  confidenceScore Float?
+  conflictDetected Boolean @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("evidence_matrix")
+}
+
+model ValuationLog {
+  id            String   @id @default(cuid())
+  banknoteId    String
+  banknote      Banknote @relation(fields: [banknoteId], references: [id], onDelete: Cascade)
+
+  pmgValue      String?
+  heritageValue String?
+  stacksBowersValue String?
+  ebayValue     String?
+  numistaValue  String?
+
+  estimatedValue String?
+  confidenceScore Float?
+  conflictDetected Boolean @default(false)
+
+  source        String   // "manual", "api_scrape", "average"
+
+  createdAt     DateTime @default(now())
+
+  @@index([banknoteId])
+  @@map("valuation_logs")
+}
+
+// ============================================================================
+// SYNC QUEUE (FOR OFFLINE-FIRST MOBILE)
+// ============================================================================
+
+model SyncQueue {
+  id            String   @id @default(cuid())
+  userId        String
+
+  banknoteId    String?  // Null for new captures not yet synced
+  localId       String   // Client-generated UUID for offline specimens
+
+  action        SyncAction // CREATE, UPDATE, DELETE
+  status        SyncQueueStatus @default(PENDING)
+
+  payload       Json     // Contains specimen data for sync
+
+  retryCount    Int      @default(0)
+  lastRetryAt   DateTime?
+  errorMessage  String?  @db.Text
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([localId])
+  @@map("sync_queue")
+}
+
+enum SyncAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum SyncQueueStatus {
+  PENDING
+  SYNCING
+  COMPLETED
+  FAILED
+}

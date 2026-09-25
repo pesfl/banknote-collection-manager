@@ -1,0 +1,57 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1", "sfo1", "lhr1"],
+  "env": [
+    {
+      "key": "DATABASE_URL",
+      "description": "PostgreSQL database connection string",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "NEXTAUTH_URL",
+      "description": "NextAuth callback URL",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "NEXTAUTH_SECRET",
+      "description": "NextAuth secret key (generate with: openssl rand -base64 32)",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "GOOGLE_GENERATIVE_AI_API_KEY",
+      "description": "Google Gemini API key",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "AWS_REGION",
+      "description": "AWS region for S3",
+      "value": "us-east-1",
+      "type": "string"
+    },
+    {
+      "key": "AWS_ACCESS_KEY_ID",
+      "description": "AWS access key",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "AWS_SECRET_ACCESS_KEY",
+      "description": "AWS secret key",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "S3_BUCKET_NAME",
+      "description": "S3 bucket for image storage",
+      "value": "banknotes-collection",
+      "type": "string"
+    }
+  ]
+}

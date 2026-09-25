@@ -1,0 +1,78 @@
+{
+  "name": "Banknote Collection Manager",
+  "short_name": "Banknotes",
+  "description": "Specimen-level banknote collection management & AI multi-source valuation system",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1f2937",
+  "background_color": "#ffffff",
+  "categories": ["productivity", "utilities"],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-1.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/icons/screenshot-2.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Capture Banknote",
+      "short_name": "Capture",
+      "description": "Quickly capture and catalog a new banknote",
+      "url": "/capture?source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/capture-icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "View Collection",
+      "short_name": "Collection",
+      "description": "View your entire banknote collection",
+      "url": "/inventory",
+      "icons": [
+        {
+          "src": "/icons/inventory-icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}
