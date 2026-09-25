@@ -215,6 +215,7 @@ export const AIExtractionSchema = z.object({
   isReplacementNote: z.boolean().default(false),
   errorType: z.string().optional(),
   defectsAndAnomalies: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export type AIExtraction = z.infer<typeof AIExtractionSchema>;
