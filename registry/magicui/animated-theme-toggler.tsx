@@ -13,20 +13,28 @@ export function AnimatedThemeToggler({ variant = 'circle' }: AnimatedThemeToggle
 
   useEffect(() => {
     setMounted(true);
-    const prefersDark = document.documentElement.classList.contains('dark');
-    setIsDark(prefersDark);
+    // Check localStorage first, then document class
+    const savedTheme = localStorage.getItem('theme');
+    const isDarkMode = savedTheme === 'dark' || (!savedTheme && document.documentElement.classList.contains('dark'));
+    setIsDark(isDarkMode);
   }, []);
 
   const toggleTheme = () => {
     const html = document.documentElement;
-    if (html.classList.contains('dark')) {
+    const currentIsDark = html.classList.contains('dark');
+
+    if (currentIsDark) {
+      // Switch to light mode
       html.classList.remove('dark');
       localStorage.setItem('theme', 'light');
       setIsDark(false);
+      document.documentElement.style.colorScheme = 'light';
     } else {
+      // Switch to dark mode
       html.classList.add('dark');
       localStorage.setItem('theme', 'dark');
       setIsDark(true);
+      document.documentElement.style.colorScheme = 'dark';
     }
   };
 
