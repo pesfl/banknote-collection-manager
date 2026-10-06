@@ -24,7 +24,7 @@ export default function BanknoteListItem({ banknote, imageUrl }: BanknoteListIte
   };
 
   return (
-    <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 hover:border-slate-600 transition-colors">
+    <div className="bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 p-4 hover:border-slate-400 dark:hover:border-slate-600 transition-colors">
       <div className="grid grid-cols-12 gap-3">
         {/* Left: Image (compact, 2 col) */}
         <div className="col-span-2">
