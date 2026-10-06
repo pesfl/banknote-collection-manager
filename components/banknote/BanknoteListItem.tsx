@@ -1,10 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import type { Banknote } from '@/types';
 
 interface BanknoteListItemProps {
@@ -13,180 +8,166 @@ interface BanknoteListItemProps {
 }
 
 export default function BanknoteListItem({ banknote, imageUrl }: BanknoteListItemProps) {
-  const [expanded, setExpanded] = useState(false);
-
   const gradeColor = (grade?: string) => {
     switch (grade) {
       case 'UNC':
-        return 'bg-emerald-500';
+        return 'bg-blue-600';
       case 'AU':
         return 'bg-blue-500';
       case 'XF':
-        return 'bg-purple-500';
+        return 'bg-purple-600';
       case 'VF':
-        return 'bg-amber-500';
+        return 'bg-amber-600';
       default:
-        return 'bg-gray-500';
+        return 'bg-gray-600';
     }
   };
 
   return (
-    <Card className="w-full border-0 shadow-lg hover:shadow-xl transition-shadow bg-slate-900 border-l-4 border-l-blue-500">
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-2xl font-bold text-white">{banknote.countryOfOrigin || 'Unknown'}</h3>
-            <p className="text-lg text-slate-300 mt-1">{banknote.denomination || 'Unknown'}</p>
-          </div>
-          <Badge variant="outline" className="text-xs px-2 py-1 bg-blue-500/20 border-blue-500/50 text-blue-300">
-            ★ {banknote.conditionGrade || 'N/A'}
-          </Badge>
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Image */}
-          <div className="flex justify-center lg:justify-start">
-            <div className="w-full max-w-xs h-48 rounded-lg border-2 border-blue-500/30 bg-slate-800 flex items-center justify-center overflow-hidden">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={`${banknote.countryOfOrigin} ${banknote.denomination}`}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-4xl">📷</span>
-              )}
-            </div>
-          </div>
-
-          {/* Center: Details */}
-          <div className="lg:col-span-1 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              {banknote.issueYear && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800">
-                  <span className="text-sm font-semibold text-blue-400">YEAR</span>
-                  <span className="text-sm text-slate-300">{banknote.issueYear}</span>
-                </div>
-              )}
-
-              {banknote.pickNumber && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800">
-                  <span className="text-sm font-semibold text-blue-400">#</span>
-                  <span className="text-sm text-slate-300">{banknote.pickNumber}</span>
-                </div>
-              )}
-
-              {banknote.fullSerialNumber && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800">
-                  <span className="text-xs font-semibold text-blue-400">SERIAL</span>
-                  <span className="text-xs text-slate-300 truncate">{banknote.fullSerialNumber}</span>
-                </div>
-              )}
-
-              {banknote.serialPrefix && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800">
-                  <span className="text-sm font-semibold text-blue-400">PREFIX</span>
-                  <span className="text-sm text-slate-300">{banknote.serialPrefix}</span>
-                </div>
-              )}
-
-              {banknote.seriesDate && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800">
-                  <span className="text-xs font-semibold text-blue-400">SERIES</span>
-                  <span className="text-xs text-slate-300">{banknote.seriesDate}</span>
-                </div>
-              )}
-
-              {banknote.signature1Name && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800">
-                  <span className="text-xs font-semibold text-blue-400">SIG</span>
-                  <span className="text-xs text-slate-300 truncate">{banknote.signature1Name}</span>
-                </div>
-              )}
-            </div>
-
-            {banknote.watermarks && (
-              <div className="px-3 py-2 rounded bg-slate-800">
-                <span className="text-xs font-semibold text-blue-400">WATERMARK</span>
-                <p className="text-sm text-slate-300 mt-1">{banknote.watermarks}</p>
-              </div>
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 hover:border-slate-600 transition-colors">
+      <div className="grid grid-cols-12 gap-3">
+        {/* Left: Image (compact, 2 col) */}
+        <div className="col-span-2">
+          <div className="w-full aspect-square rounded border border-slate-600 bg-slate-900 flex items-center justify-center overflow-hidden">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={`${banknote.countryOfOrigin} ${banknote.denomination}`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-lg">📷</span>
             )}
           </div>
+        </div>
 
-          {/* Right: Valuation */}
-          <div className="lg:col-span-1 space-y-3">
-            {/* Grade Card */}
-            <div className={`${gradeColor(banknote.conditionGrade)} rounded-lg p-6 text-white text-center`}>
-              <div className="text-xs opacity-75 mb-2 font-semibold">GRADE</div>
-              <div className="text-4xl font-bold">{banknote.conditionGrade || 'UNC'}</div>
-              <div className="text-xs opacity-75 mt-2">
-                {banknote.conditionGrade === 'UNC' && 'Uncirculated'}
-                {banknote.conditionGrade === 'AU' && 'Almost Uncirculated'}
-                {banknote.conditionGrade === 'XF' && 'Extra Fine'}
-                {banknote.conditionGrade === 'VF' && 'Very Fine'}
-                {!['UNC', 'AU', 'XF', 'VF'].includes(banknote.conditionGrade || '') && 'Specimen Grade'}
-              </div>
+        {/* Center: Compact Details Grid (7 col) */}
+        <div className="col-span-7">
+          <div className="grid grid-cols-4 gap-2">
+            {/* Country */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">🌍 COUNTRY</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.countryOfOrigin || '—'}</div>
             </div>
+
+            {/* Denomination */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">💵 DENOMINATION</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.denomination || '—'}</div>
+            </div>
+
+            {/* Year */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">📅 YEAR</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.issueYear || '—'}</div>
+            </div>
+
+            {/* Pick Number */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">🔍 PICK#</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.pickNumber || '—'}</div>
+            </div>
+
+            {/* Serial Number */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">🔢 SERIAL</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.fullSerialNumber || '—'}</div>
+            </div>
+
+            {/* Prefix */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">🏷️ PREFIX</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.serialPrefix || '—'}</div>
+            </div>
+
+            {/* Series */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">📋 SERIES</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.seriesDate || '—'}</div>
+            </div>
+
+            {/* Signatures */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">✍️ SIGNATURES</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.signature1Name || '—'}</div>
+            </div>
+
+            {/* Special Features */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">✨ FEATURES</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.securityFeatures ? 'Yes' : 'No'}</div>
+            </div>
+
+            {/* Condition */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">🎯 CONDITION</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.conditionGrade || '—'}</div>
+            </div>
+
+            {/* Watermark */}
+            <div className="bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">💧 WATERMARK</div>
+              <div className="text-xs text-white mt-0.5 truncate font-medium">{banknote.watermarks || '—'}</div>
+            </div>
+
+            {/* Notes - Full width */}
+            <div className="col-span-4 bg-slate-700 rounded p-1.5">
+              <div className="text-xs text-slate-400 font-semibold flex items-center gap-0.5">📝 NOTES</div>
+              <div className="text-xs text-white mt-0.5 line-clamp-2 font-medium">{banknote.notes || '—'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Grade and Values (3 col) */}
+        <div className="col-span-3 space-y-2">
+          {/* Grade Box */}
+          <div className={`${gradeColor(banknote.conditionGrade)} rounded-lg p-2.5 text-center text-white`}>
+            <div className="text-xs opacity-75 font-semibold">Grade</div>
+            <div className="text-2xl font-bold leading-none">{banknote.conditionGrade || '?'}</div>
+          </div>
+
+          {/* Values Section */}
+          <div className="bg-slate-700/50 rounded-lg border border-slate-600 p-2 space-y-1.5">
+            <div className="text-xs font-semibold text-slate-300">VALUES (USD)</div>
 
             {/* PMG Value */}
-            {banknote.numistaPmgValue && (
-              <div className="bg-emerald-500/20 border border-emerald-500/50 rounded-lg p-4 text-white">
-                <div className="text-xs opacity-75 mb-2 font-semibold">PMG VALUE</div>
-                <div className="text-2xl font-bold text-emerald-400">{banknote.numistaPmgValue}</div>
+            {banknote.numistaPmgValue ? (
+              <div className="bg-blue-900/60 border border-blue-700 rounded p-1.5">
+                <div className="text-xs text-slate-300 font-semibold">PMG VALUE</div>
+                <div className="text-sm font-bold text-blue-300">{banknote.numistaPmgValue}</div>
+              </div>
+            ) : (
+              <div className="bg-slate-600/50 rounded p-1.5">
+                <div className="text-xs text-slate-400 font-semibold">PMG VALUE</div>
+                <div className="text-xs text-slate-500">Unknown</div>
               </div>
             )}
 
-            {/* Market Value */}
-            {banknote.collectorMarketValue && (
-              <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 text-white">
-                <div className="text-xs opacity-75 mb-2 font-semibold">COLLECTOR MARKET VALUE</div>
-                <div className="text-2xl font-bold text-amber-400">{banknote.collectorMarketValue}</div>
+            {/* Numista Value */}
+            {banknote.collectorMarketValue ? (
+              <div className="bg-green-900/60 border border-green-700 rounded p-1.5">
+                <div className="text-xs text-slate-300 font-semibold">NUMISTA VALUE</div>
+                <div className="text-sm font-bold text-green-300">{banknote.collectorMarketValue}</div>
+              </div>
+            ) : (
+              <div className="bg-slate-600/50 rounded p-1.5">
+                <div className="text-xs text-slate-400 font-semibold">NUMISTA VALUE</div>
+                <div className="text-xs text-slate-500">Unknown</div>
               </div>
             )}
 
-            {/* Source */}
-            <div className="bg-teal-500/20 border border-teal-500/50 rounded-lg p-4 text-white text-sm space-y-1">
-              <div className="text-xs opacity-75 font-semibold mb-2">SOURCE & INFO</div>
-              <div>📊 PMG / NumisMaster</div>
-              <div>✓ Verified</div>
-              {banknote.acquisitionDate && (
-                <div>📅 {new Date(banknote.acquisitionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-              )}
+            {/* Collector Market Value */}
+            <div className="bg-amber-900/60 border border-amber-700 rounded p-1.5">
+              <div className="text-xs text-slate-300 font-semibold">COLLECTOR'S MARKET</div>
+              <div className="text-sm font-bold text-amber-300">
+                {banknote.acquisitionDate
+                  ? new Date(banknote.acquisitionDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                  : 'N/A'}
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Notes Section */}
-        {(banknote.notes || banknote.defectsAndAnomalies) && (
-          <div className="mt-6 pt-6 border-t border-slate-700">
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-            >
-              {expanded ? '▼ Hide Details' : '▶ Show Details'}
-            </button>
-
-            {expanded && (
-              <div className="mt-4 space-y-4">
-                {banknote.notes && (
-                  <div>
-                    <p className="text-xs text-slate-400 font-semibold mb-2">NOTES & FEATURES</p>
-                    <p className="text-sm text-slate-300">{banknote.notes}</p>
-                  </div>
-                )}
-                {banknote.defectsAndAnomalies && (
-                  <div>
-                    <p className="text-xs text-slate-400 font-semibold mb-2">DEFECTS & ANOMALIES</p>
-                    <p className="text-sm text-slate-300">{banknote.defectsAndAnomalies}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

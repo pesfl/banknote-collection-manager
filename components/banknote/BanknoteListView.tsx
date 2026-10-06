@@ -35,41 +35,41 @@ export default function BanknoteListView({
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 md:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-slate-950 p-3">
+      <div className="max-w-full mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 flex items-center gap-3">
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
             🏦 <span>BANKNOTE INVENTORY</span>
           </h1>
-          <p className="text-slate-400">
+          <p className="text-xs text-slate-400">
             Manage and view your complete banknote collection
           </p>
         </div>
 
         {/* Controls */}
-        <Card className="mb-8 bg-slate-900 border-slate-800 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="mb-3 bg-slate-900 border-slate-800 p-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {/* Search */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                🔍 <span>SEARCH</span>
+              <label className="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                🔍 SEARCH
               </label>
               <Input
-                placeholder="Country, denomination, or notes..."
+                placeholder="Country, denomination, notes..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 text-xs h-8"
               />
             </div>
 
             {/* Sort */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                📊 <span>SORT BY</span>
+              <label className="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                📊 SORT BY
               </label>
               <Select value={sortBy} onValueChange={(val) => handleSort(val as 'recent' | 'country' | 'value')}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white text-xs h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
@@ -82,10 +82,10 @@ export default function BanknoteListView({
 
             {/* Stats */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                📈 <span>COLLECTION STATS</span>
+              <label className="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                📈 STATS
               </label>
-              <div className="bg-slate-800 rounded-md p-3 text-white text-sm">
+              <div className="bg-slate-800 rounded-md p-2 text-white text-xs">
                 <span className="text-slate-400">Total: </span>
                 <span className="font-bold text-blue-400">{filteredBanknotes.length}</span>
               </div>
@@ -111,7 +111,7 @@ export default function BanknoteListView({
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-2">
             {filteredBanknotes.map(banknote => (
               <BanknoteListItem
                 key={banknote.id}
