@@ -38,7 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      suppressHydrationWarning
     >
       <head>
         <link rel="icon" href="/favicon.ico" />
@@ -47,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="theme-color" content="#1f2937" />
       </head>
-      <body className="min-h-full flex flex-col bg-white dark:bg-gray-950">{children}</body>
+      <body className="min-h-full flex flex-col bg-white dark:bg-slate-950">{children}</body>
     </html>
   );
 }

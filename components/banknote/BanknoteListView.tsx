@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
+import { AnimatedThemeToggler } from '@/registry/magicui/animated-theme-toggler';
 import type { Banknote } from '@/types';
 import BanknoteListItem from './BanknoteListItem';
 
@@ -38,13 +39,16 @@ export default function BanknoteListView({
     <div className="min-h-screen bg-slate-950 p-3">
       <div className="max-w-full mx-auto">
         {/* Header */}
-        <div className="mb-3">
-          <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-            🏦 <span>BANKNOTE INVENTORY</span>
-          </h1>
-          <p className="text-xs text-slate-400">
-            Manage and view your complete banknote collection
-          </p>
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+              🏦 <span>BANKNOTE INVENTORY</span>
+            </h1>
+            <p className="text-xs text-slate-400">
+              Manage and view your complete banknote collection
+            </p>
+          </div>
+          <AnimatedThemeToggler variant="triangle" />
         </div>
 
         {/* Controls */}
