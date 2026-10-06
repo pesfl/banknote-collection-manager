@@ -36,31 +36,31 @@ export default function BanknoteListView({
   );
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 p-3">
-      <div className="max-w-full mx-auto">
+    <div className="min-h-screen bg-slate-100/50 dark:bg-slate-950 p-4 transition-colors">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-black dark:text-white mb-1 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
               🏦 <span>BANKNOTE INVENTORY</span>
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Manage and view your complete banknote collection
             </p>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-              ➕ Add Note
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 shadow-sm">
+              <span>➕</span> <span>Add Note</span>
             </button>
-            <button className="bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-black dark:text-white px-3 py-2 rounded-lg text-sm transition-colors border border-slate-400 dark:border-slate-600">
+            <button className="bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm">
               🔍 Search
             </button>
-            <button className="bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-black dark:text-white px-3 py-2 rounded-lg text-sm transition-colors border border-slate-400 dark:border-slate-600">
+            <button className="bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm">
               📥 Export
             </button>
-            <button className="bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-black dark:text-white px-3 py-2 rounded-lg text-sm transition-colors border border-slate-400 dark:border-slate-600">
+            <button className="bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 dark:border-slate-700 shadow-sm">
               ☰
             </button>
             <AnimatedThemeToggler />
@@ -68,8 +68,8 @@ export default function BanknoteListView({
         </div>
 
         {/* Controls */}
-        <Card className="mb-3 bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 p-2">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <Card className="mb-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 p-3 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Search */}
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
@@ -79,7 +79,7 @@ export default function BanknoteListView({
                 placeholder="Country, denomination, notes..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-black dark:text-white placeholder:text-slate-500 text-xs h-8"
+                className="bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 text-xs h-9"
               />
             </div>
 
@@ -89,10 +89,10 @@ export default function BanknoteListView({
                 📊 SORT BY
               </label>
               <Select value={sortBy} onValueChange={(val) => handleSort(val as 'recent' | 'country' | 'value')}>
-                <SelectTrigger className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-black dark:text-white text-xs h-8">
+                <SelectTrigger className="bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs h-9">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700">
+                <SelectContent className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                   <SelectItem value="recent">Most Recent</SelectItem>
                   <SelectItem value="country">Country (A-Z)</SelectItem>
                   <SelectItem value="value">Estimated Value</SelectItem>
@@ -105,9 +105,9 @@ export default function BanknoteListView({
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
                 📈 STATS
               </label>
-              <div className="bg-slate-200 dark:bg-slate-800 rounded-md p-2 text-black dark:text-white text-xs">
-                <span className="text-slate-600 dark:text-slate-400">Total: </span>
-                <span className="font-bold text-blue-400">{filteredBanknotes.length}</span>
+              <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-md p-2 text-slate-900 dark:text-white text-xs h-9 flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Total Notes:</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{filteredBanknotes.length}</span>
               </div>
             </div>
           </div>

@@ -1,69 +1,144 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-interface AnimatedThemeTogglerProps {
-  variant?: 'triangle' | 'circle' | 'square';
+export interface AnimatedThemeTogglerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  className?: string;
+  duration?: number;
 }
 
-export function AnimatedThemeToggler({ variant = 'circle' }: AnimatedThemeTogglerProps) {
+export function AnimatedThemeToggler({
+  className,
+  duration = 500,
+  ...props
+}: AnimatedThemeTogglerProps) {
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setMounted(true);
-    // Check localStorage first, then document class
-    const savedTheme = localStorage.getItem('theme');
-    const isDarkMode = savedTheme === 'dark' || (!savedTheme && document.documentElement.classList.contains('dark'));
-    setIsDark(isDarkMode);
+    const saved = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialDark = saved ? saved === 'dark' : (document.documentElement.classList.contains('dark') || prefersDark);
+    setIsDark(initialDark);
+    if (initialDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
+    }
   }, []);
 
-  const toggleTheme = () => {
-    const html = document.documentElement;
-    const currentIsDark = html.classList.contains('dark');
+  const toggleTheme = useCallback(
+    async (event?: React.MouseEvent<HTMLButtonElement>) => {
+      const nextDark = !isDark;
 
-    if (currentIsDark) {
-      // Switch to light mode
-      html.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-      setIsDark(false);
-      document.documentElement.style.colorScheme = 'light';
-    } else {
-      // Switch to dark mode
-      html.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-      setIsDark(true);
-      document.documentElement.style.colorScheme = 'dark';
-    }
-  };
+      const updateDOM = () => {
+        setIsDark(nextDark);
+        if (nextDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = 'dark';
+          localStorage.setItem('theme', 'dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.colorScheme = 'light';
+          localStorage.setItem('theme', 'light');
+        }
+      };
 
-  if (!mounted) return null;
+      // Check if View Transition API is supported and motion isn't reduced
+      if (
+        typeof document === 'undefined' ||
+        !('startViewTransition' in document) ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ) {
+        updateDOM();
+        return;
+      }
 
-  const baseStyles = 'relative inline-flex items-center justify-center p-2 rounded-lg transition-all duration-300 cursor-pointer group';
+      const button = buttonRef.current;
+      const rect = button?.getBoundingClientRect();
+      const x = event?.clientX || (rect ? rect.left + rect.width / 2 : window.innerWidth / 2);
+      const y = event?.clientY || (rect ? rect.top + rect.height / 2 : window.innerHeight / 2);
 
-  const variants = {
-    circle: 'rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700',
-    triangle: 'rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transform hover:scale-110',
-    square: 'rounded-md bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700',
-  };
+      const endRadius = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y)
+      );
+
+      const transition = (document as any).startViewTransition(() => {
+        updateDOM();
+      });
+
+      try {
+        await transition.ready;
+        const clipPath = [
+          `circle(0px at ${x}px ${y}px)`,
+          `circle(${endRadius}px at ${x}px ${y}px)`,
+        ];
+
+        document.documentElement.animate(
+          {
+            clipPath: clipPath,
+          },
+          {
+            duration: duration,
+            easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+            pseudoElement: '::view-transition-new(root)',
+          }
+        );
+      } catch (e) {
+        // Safe fallback
+      }
+    },
+    [isDark, duration]
+  );
+
+  if (!mounted) {
+    return (
+      <button
+        ref={buttonRef}
+        type="button"
+        className={cn(
+          'relative inline-flex items-center justify-center p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm opacity-50 w-9 h-9',
+          className
+        )}
+        aria-label="Toggle theme"
+        {...props}
+      >
+        <span className="w-5 h-5" />
+      </button>
+    );
+  }
 
   return (
     <button
+      ref={buttonRef}
+      type="button"
       onClick={toggleTheme}
-      className={`${baseStyles} ${variants[variant]}`}
+      className={cn(
+        'relative inline-flex items-center justify-center p-2 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm transition-colors cursor-pointer w-9 h-9 group overflow-hidden',
+        className
+      )}
       aria-label="Toggle theme"
+      {...props}
     >
-      <div className="relative w-5 h-5">
+      <div className="relative w-5 h-5 flex items-center justify-center">
         <Sun
-          className={`absolute w-5 h-5 text-yellow-500 transition-all duration-300 ${
+          className={cn(
+            'absolute w-4 h-4 text-amber-500 transition-all duration-300 transform',
             isDark ? 'opacity-0 rotate-90 scale-0' : 'opacity-100 rotate-0 scale-100'
-          }`}
+          )}
         />
         <Moon
-          className={`absolute w-5 h-5 text-blue-400 transition-all duration-300 ${
+          className={cn(
+            'absolute w-4 h-4 text-indigo-400 transition-all duration-300 transform',
             isDark ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-0'
-          }`}
+          )}
         />
       </div>
     </button>
