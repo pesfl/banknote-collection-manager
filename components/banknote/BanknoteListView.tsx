@@ -39,7 +39,7 @@ export default function BanknoteListView({
     <div className="min-h-screen bg-slate-950 p-3">
       <div className="max-w-full mx-auto">
         {/* Header */}
-        <div className="mb-3 flex items-start justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
               🏦 <span>BANKNOTE INVENTORY</span>
@@ -48,7 +48,23 @@ export default function BanknoteListView({
               Manage and view your complete banknote collection
             </p>
           </div>
-          <AnimatedThemeToggler variant="triangle" />
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              ➕ Add Note
+            </button>
+            <button className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition-colors border border-slate-600">
+              🔍 Search
+            </button>
+            <button className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition-colors border border-slate-600">
+              📥 Export
+            </button>
+            <button className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition-colors border border-slate-600">
+              ☰
+            </button>
+            <AnimatedThemeToggler variant="triangle" />
+          </div>
         </div>
 
         {/* Controls */}
