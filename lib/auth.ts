@@ -8,7 +8,7 @@ import { prisma } from './db/prisma';
  * Supports multiple authentication methods
  */
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: process.env.DATABASE_URL ? (PrismaAdapter(prisma) as any) : undefined,
   providers: [
     CredentialsProvider({
       name: 'Credentials',

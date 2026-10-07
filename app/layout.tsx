@@ -34,6 +34,9 @@ export const viewport: Viewport = {
   themeColor: '#1f2937',
 };
 
+import { AppProviders } from '@/components/providers/AppProviders';
+import { AppShell } from '@/components/layout/AppShell';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
@@ -67,7 +70,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="theme-color" content="#1f2937" />
       </head>
-      <body className="min-h-full flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">{children}</body>
+      <body className="min-h-full flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+        <AppProviders>
+          <AppShell>{children}</AppShell>
+        </AppProviders>
+      </body>
     </html>
   );
 }
+
