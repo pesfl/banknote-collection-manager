@@ -2,17 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { 
-  Banknote, 
-  TrendingUp, 
-  Camera, 
-  Scale, 
-  AlertTriangle, 
-  Sparkles, 
-  Box, 
-  ArrowUpRight, 
-  CheckCircle2, 
-  Clock, 
+import {
+  Banknote,
+  TrendingUp,
+  Camera,
+  Scale,
+  AlertTriangle,
+  Sparkles,
+  Box,
+  ArrowUpRight,
+  CheckCircle2,
+  Clock,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -139,7 +139,7 @@ export default function DashboardPage() {
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Camera className="h-4 w-4" />
-            <span>Dual-Image Capture</span>
+            <span>Add New Note</span>
           </Link>
           <Link
             href="/banknotes"
@@ -455,11 +455,10 @@ export default function DashboardPage() {
                   </td>
                   <td className="py-3.5 pr-2 text-right">
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        item.status === 'CONFIRMED'
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${item.status === 'CONFIRMED'
                           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
                           : 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
-                      }`}
+                        }`}
                     >
                       {item.confidence}
                     </span>

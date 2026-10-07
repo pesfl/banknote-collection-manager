@@ -11,11 +11,12 @@ import {
   BarChart3, 
   Settings, 
   Box, 
-  Sparkles,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   Database
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { AnimatedThemeToggler } from '@/registry/magicui/animated-theme-toggler';
 
 interface NavItem {
   name: string;
@@ -39,17 +40,17 @@ const NAV_ITEMS: NavItem[] = [
     badgeColor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   },
   {
-    name: 'Dual-Image Capture',
+    name: 'Add New Note',
     href: '/capture',
     icon: Camera,
-    badge: 'AI Active',
+    badge: 'AI',
     badgeColor: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
   },
   {
     name: '5+1 Valuation Matrix',
     href: '/valuation',
     icon: Scale,
-    badge: '5 Sources',
+    badge: '5 Src',
     badgeColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   },
   {
@@ -65,14 +66,20 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 interface AppSidebarProps {
-  isOpen?: boolean;
-  onClose?: () => void;
+  isMobileOpen?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  onCloseMobile?: () => void;
 }
 
-export function AppSidebar({ isOpen = false, onClose }: AppSidebarProps) {
+export function AppSidebar({
+  isMobileOpen = false,
+  isCollapsed = false,
+  onToggleCollapse,
+  onCloseMobile,
+}: AppSidebarProps) {
   const pathname = usePathname();
 
-  // Helper to test if route is active
   const isActive = (href: string) => {
     if (href === '/') {
       return pathname === '/' || pathname === '/dashboard';
@@ -82,31 +89,59 @@ export function AppSidebar({ isOpen = false, onClose }: AppSidebarProps) {
 
   return (
     <>
-      {/* Mobile Backdrop */}
-      {isOpen && (
+      {/* Mobile Overlay */}
+      {isMobileOpen && (
         <div
-          onClick={onClose}
-          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-xs lg:hidden animate-in fade-in"
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-xs lg:hidden animate-in fade-in"
         />
       )}
 
       {/* Sidebar Container */}
       <aside
         className={clsx(
-          'fixed lg:sticky top-0 lg:top-16 z-50 lg:z-30 h-full lg:h-[calc(100vh-4rem)] w-64 flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md transition-all duration-300 flex',
-          isOpen ? 'left-0' : '-left-64 lg:left-0'
+          'fixed lg:sticky top-0 lg:top-16 z-50 lg:z-30 h-full lg:h-[calc(100vh-4rem)] flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#0b132b]/95 backdrop-blur-md transition-all duration-300 ease-in-out flex shrink-0',
+          // Desktop Width
+          isCollapsed ? 'lg:w-[72px]' : 'lg:w-64',
+          // Mobile Visibility
+          isMobileOpen ? 'left-0 w-64' : '-left-64 lg:left-0'
         )}
       >
         {/* Top Section */}
-        <div className="flex flex-col gap-6 p-4">
-          {/* Mobile Header in Drawer */}
-          <div className="flex items-center justify-between lg:hidden pb-3 border-b border-slate-200 dark:border-slate-800">
-            <span className="font-bold text-sm text-slate-900 dark:text-white">Navigation</span>
+        <div className="flex flex-col gap-4 p-3 sm:p-3.5">
+          {/* Mobile Drawer Header */}
+          <div className="flex items-center justify-between lg:hidden pb-2.5 border-b border-slate-200 dark:border-slate-800">
+            <span className="font-bold text-xs text-slate-900 dark:text-white uppercase tracking-wider">
+              Navigation
+            </span>
             <button
-              onClick={onClose}
+              onClick={onCloseMobile}
               className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             >
               ✕
+            </button>
+          </div>
+
+          {/* Desktop Collapse Toggle Header */}
+          <div className="hidden lg:flex items-center justify-between pb-1 px-1">
+            {!isCollapsed && (
+              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                Vault Menu
+              </span>
+            )}
+            <button
+              onClick={onToggleCollapse}
+              title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar to Rail'}
+              className={clsx(
+                'p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors',
+                isCollapsed && 'mx-auto'
+              )}
+            >
+              {isCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
             </button>
           </div>
 
@@ -120,31 +155,37 @@ export function AppSidebar({ isOpen = false, onClose }: AppSidebarProps) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  onClick={onClose}
+                  onClick={onCloseMobile}
+                  title={isCollapsed ? item.name : undefined}
                   className={clsx(
-                    'group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all',
+                    'group flex items-center rounded-xl text-xs font-semibold transition-all relative',
+                    isCollapsed 
+                      ? 'justify-center p-2.5' 
+                      : 'justify-between px-3 py-2.5',
                     active
-                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 font-semibold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/60'
+                      ? 'bg-[#0052e0] text-white shadow-sm shadow-blue-500/20'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/60'
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className={clsx('flex items-center', isCollapsed ? 'justify-center' : 'gap-3')}>
                     <Icon
                       className={clsx(
-                        'h-4 w-4 transition-transform group-hover:scale-110',
+                        'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
                         active
-                          ? 'text-blue-600 dark:text-blue-400'
+                          ? 'text-white'
                           : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200'
                       )}
                     />
-                    <span>{item.name}</span>
+                    {!isCollapsed && <span className="truncate">{item.name}</span>}
                   </div>
 
-                  {item.badge && (
+                  {!isCollapsed && item.badge && (
                     <span
                       className={clsx(
-                        'text-[10px] px-2 py-0.5 rounded-full font-medium',
-                        item.badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        'text-[10px] px-2 py-0.5 rounded-full font-bold',
+                        active
+                          ? 'bg-white/20 text-white'
+                          : item.badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                       )}
                     >
                       {item.badge}
@@ -156,30 +197,61 @@ export function AppSidebar({ isOpen = false, onClose }: AppSidebarProps) {
           </nav>
         </div>
 
-        {/* Bottom Section: Storage & Ingestion Monitor */}
-        <div className="p-4 border-t border-slate-200/80 dark:border-slate-800/80 space-y-3">
-          <div className="rounded-2xl p-3 bg-gradient-to-br from-slate-50 to-blue-50/40 dark:from-slate-800/60 dark:to-slate-900/80 border border-slate-200/60 dark:border-slate-700/60 shadow-xs">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Box className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                Physical Storage
-              </span>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono font-bold">
-                Box 01 → Sec A
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              Active specimen box tracking & slot capacity verified.
-            </p>
+        {/* Bottom Section: Theme Toggler, Storage & Ingestion Monitor */}
+        <div className="p-3 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
+          {/* Dark Mode Theme Toggler (Right above Box content) */}
+          <div
+            className={clsx(
+              'flex items-center rounded-xl transition-all',
+              isCollapsed
+                ? 'justify-center py-1'
+                : 'justify-between px-3 py-2 bg-slate-50/90 dark:bg-[#111c3d]/70 border border-slate-200/70 dark:border-slate-800/90 shadow-xs'
+            )}
+          >
+            {!isCollapsed && (
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  Theme Mode
+                </span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                  Light / Dark toggle
+                </span>
+              </div>
+            )}
+            <AnimatedThemeToggler />
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 px-1">
-            <span className="flex items-center gap-1">
-              <Database className="h-3 w-3" />
-              <span>Offline IDB Active</span>
-            </span>
-            <span className="font-mono text-[10px]">v1.0.0</span>
-          </div>
+          {/* Storage Box Content */}
+          {!isCollapsed ? (
+            <div className="rounded-xl p-3 bg-gradient-to-br from-slate-50 to-blue-50/40 dark:from-[#111c3d]/60 dark:to-slate-900/80 border border-slate-200/60 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Box className="h-3.5 w-3.5 text-[#0052e0] dark:text-blue-400" />
+                  Storage Coordinates
+                </span>
+                <span className="text-[10px] text-[#0052e0] dark:text-blue-400 font-mono font-bold">
+                  Box 01
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                Vault coordinates verified. 10,000 notes capacity.
+              </p>
+            </div>
+          ) : (
+            <div className="flex justify-center p-2" title="Storage Box 01 Active">
+              <Box className="h-4 w-4 text-[#0052e0] dark:text-blue-400" />
+            </div>
+          )}
+
+          {!isCollapsed && (
+            <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1">
+              <span className="flex items-center gap-1 font-mono">
+                <Database className="h-3 w-3" />
+                <span>Offline IDB Active</span>
+              </span>
+              <span className="font-mono">v1.0.0</span>
+            </div>
+          )}
         </div>
       </aside>
     </>
