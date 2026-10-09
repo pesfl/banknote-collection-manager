@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f0f4fa] dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-[#eef2f7] dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors">
       <AppHeader
         isCollapsed={isCollapsed}
         onToggleCollapse={toggleCollapsed}

@@ -1,474 +1,838 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Banknote,
-  TrendingUp,
+  Globe,
+  Layers,
+  Copy,
+  CircleDollarSign,
+  Plus,
   Camera,
-  Scale,
-  AlertTriangle,
   Sparkles,
-  Box,
-  ArrowUpRight,
-  CheckCircle2,
-  Clock,
-  RefreshCw,
+  Printer,
   Search,
-  ShieldCheck,
+  Star,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
-  Layers
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+  CreditCard,
+  MessageSquare,
+  CircleDot,
+  Box
 } from 'lucide-react';
-import { useOfflineSync } from '@/hooks/useOfflineSync';
-import { getAllSpecimens } from '@/lib/offline/idb';
-import type { LocalSpecimen } from '@/types';
+import { toast } from 'sonner';
 
-// Sample demo specimens for rich initial dashboard presentation
-const SEED_HIGHLIGHTS = [
+// Collection categories tabs
+const CATEGORIES = [
+  { id: 'banknotes', label: 'Banknotes', icon: Banknote },
+  { id: 'cards', label: 'Sports Cards', icon: CreditCard },
+  { id: 'comics', label: 'Comics', icon: MessageSquare },
+  { id: 'pokemon', label: 'Pokémon', icon: CircleDot },
+  { id: 'other', label: 'Other', icon: Box },
+];
+
+interface BanknoteRow {
+  id: string;
+  country: string;
+  countryFlag: string;
+  denomination: string;
+  year: string;
+  pickNumber: string;
+  condition: string;
+  qty: number;
+  value: string;
+  isSpecial: boolean;
+  isVerified: boolean;
+  hasMissingInfo: boolean;
+  frontImage: string;
+  backImage: string;
+  notes?: string;
+  serialNumber?: string;
+}
+
+const SAMPLE_BANKNOTES: BanknoteRow[] = [
   {
-    id: 'BN-000142',
-    country: 'Canada',
-    denomination: '1,000 Dollars',
-    pick: 'P-45a',
-    year: '1954',
-    serial: 'A1234567',
-    grade: 'UNC',
-    value: '$2,750.00',
-    cost: '$2,300.00',
-    roi: '+19.5%',
-    confidence: '🟢 98% Confirmed',
-    box: 'Box A -> Sec 1 -> Pos 01',
-    image: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=600&auto=format&fit=crop&q=60',
-    status: 'CONFIRMED',
-  },
-  {
-    id: 'BN-000143',
+    id: 'BN-BR-001',
     country: 'Brazil',
-    denomination: '100 Cruzados',
-    pick: 'P-211c',
-    year: '1986',
-    serial: '97.151.001 C',
-    grade: 'UNC',
-    value: '$16.00',
-    cost: '$10.00',
-    roi: '+60.0%',
-    confidence: '🟢 95% Confirmed',
-    box: 'Box 01 -> Sec A -> Pos 23',
-    image: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=600&auto=format&fit=crop&q=60',
-    status: 'CONFIRMED',
+    countryFlag: '🇧🇷',
+    denomination: '500 Cruzeiros',
+    year: '1981',
+    pickNumber: 'P-198b',
+    condition: 'UNC',
+    qty: 12,
+    value: '$240',
+    isSpecial: true,
+    isVerified: true,
+    hasMissingInfo: false,
+    frontImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
+    notes: 'Deodoro da Fonseca portrait / Central Bank of Brazil engraving.',
+    serialNumber: 'A 0482019482 C'
   },
   {
-    id: 'BN-000144',
-    country: 'United States',
-    denomination: '$100',
-    pick: 'P-540',
-    year: '2013',
-    serial: 'L12345678A',
-    grade: 'AU',
-    value: '$145.00',
-    cost: '$120.00',
-    roi: '+20.8%',
-    confidence: '🟢 100% Confirmed',
-    box: 'Box B -> Sec 2 -> Pos 05',
-    image: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=600&auto=format&fit=crop&q=60',
-    status: 'CONFIRMED',
+    id: 'BN-AR-002',
+    country: 'Argentina',
+    countryFlag: '🇦🇷',
+    denomination: '100 Australes',
+    year: '1985',
+    pickNumber: 'P-331a',
+    condition: 'UNC',
+    qty: 24,
+    value: '$168',
+    isSpecial: false,
+    isVerified: true,
+    hasMissingInfo: false,
+    frontImage: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
+    notes: 'Nicolás Avellaneda portrait. Liberty holding torch on reverse.',
+    serialNumber: '14.829.301 A'
   },
   {
-    id: 'BN-000145',
+    id: 'BN-BO-003',
     country: 'Bolivia',
+    countryFlag: '🇧🇴',
     denomination: '10 Bolivianos',
-    pick: 'P-327c',
-    year: '1986',
-    serial: '87654321',
-    grade: 'AU',
-    value: '$45.00',
-    cost: '$35.00',
-    roi: '+28.5%',
-    confidence: '🟠 Catalog Conflict',
-    box: 'Box C -> Sec 3 -> Pos 10',
-    image: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=60',
-    status: 'CONFLICT',
-    conflictNote: 'PMG lists P-327b vs Numista P-327c (Watermark Type 2)',
+    year: '1981',
+    pickNumber: 'P-164a',
+    condition: 'UNC',
+    qty: 30,
+    value: '$90',
+    isSpecial: true,
+    isVerified: true,
+    hasMissingInfo: false,
+    frontImage: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
+    notes: 'Painter Cecilio Guzmán de Rojas / Mount Illimani landscape.',
+    serialNumber: '87654321'
+  },
+  {
+    id: 'BN-MX-004',
+    country: 'Mexico',
+    countryFlag: '🇲🇽',
+    denomination: '1000 Pesos',
+    year: '1993',
+    pickNumber: 'P-94d',
+    condition: 'UNC',
+    qty: 18,
+    value: '$180',
+    isSpecial: false,
+    isVerified: true,
+    hasMissingInfo: false,
+    frontImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=80',
+    notes: 'Sor Juana Inés de la Cruz portrait. Bank of Mexico commemorative issue.',
+    serialNumber: 'B4829104'
+  },
+  {
+    id: 'BN-IN-005',
+    country: 'India',
+    countryFlag: '🇮🇳',
+    denomination: '50 Rupees',
+    year: '—',
+    pickNumber: '—',
+    condition: 'UNC',
+    qty: 8,
+    value: '—',
+    isSpecial: false,
+    isVerified: false,
+    hasMissingInfo: true,
+    frontImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&auto=format&fit=crop&q=80',
+    notes: 'Missing issue year and Krause-Mishler Pick catalog number. Pending AI re-scan.',
+    serialNumber: '72D 819203'
+  },
+  {
+    id: 'BN-CA-006',
+    country: 'Canada',
+    countryFlag: '🇨🇦',
+    denomination: '1,000 Dollars',
+    year: '1954',
+    pickNumber: 'P-45a',
+    condition: 'UNC',
+    qty: 2,
+    value: '$2,750',
+    isSpecial: true,
+    isVerified: true,
+    hasMissingInfo: false,
+    frontImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=80',
+    notes: 'Queen Elizabeth II portrait. Devil face variety verified clean.',
+    serialNumber: 'A1234567'
+  },
+  {
+    id: 'BN-US-007',
+    country: 'United States',
+    countryFlag: '🇺🇸',
+    denomination: '$100',
+    year: '2013',
+    pickNumber: 'P-540',
+    condition: 'AU',
+    qty: 4,
+    value: '$145',
+    isSpecial: false,
+    isVerified: true,
+    hasMissingInfo: false,
+    frontImage: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&auto=format&fit=crop&q=80',
+    backImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
+    notes: 'Benjamin Franklin portrait. Color-shifting bell in inkwell.',
+    serialNumber: 'L12345678A'
   },
 ];
 
 export default function DashboardPage() {
-  const { networkStatus, pendingCount, syncNow } = useOfflineSync();
-  const isOnline = networkStatus.isOnline;
-  const [localSpecimens, setLocalSpecimens] = useState<LocalSpecimen[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState('banknotes');
+  const [countryFilter, setCountryFilter] = useState('All');
+  const [denomFilter, setDenomFilter] = useState('All');
+  const [yearFilter, setYearFilter] = useState('All');
+  const [pickFilter, setPickFilter] = useState('All');
+  const [conditionFilter, setConditionFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [inspectSpecimen, setInspectSpecimen] = useState<BanknoteRow | null>(null);
 
-  useEffect(() => {
-    async function loadLocalData() {
-      try {
-        const specimens = await getAllSpecimens();
-        setLocalSpecimens(specimens);
-      } catch (err) {
-        console.error('Failed to query local specimens:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadLocalData();
-  }, []);
+  // Filtered rows
+  const filteredNotes = useMemo(() => {
+    return SAMPLE_BANKNOTES.filter((note) => {
+      const matchCountry = countryFilter === 'All' || note.country === countryFilter;
+      const matchDenom = denomFilter === 'All' || note.denomination.includes(denomFilter);
+      const matchYear = yearFilter === 'All' || note.year === yearFilter;
+      const matchPick = pickFilter === 'All' || note.pickNumber === pickFilter;
+      const matchCondition = conditionFilter === 'All' || note.condition === conditionFilter;
+      
+      const q = searchQuery.toLowerCase().trim();
+      const matchQuery =
+        !q ||
+        note.country.toLowerCase().includes(q) ||
+        note.denomination.toLowerCase().includes(q) ||
+        note.year.toLowerCase().includes(q) ||
+        note.pickNumber.toLowerCase().includes(q) ||
+        (note.notes && note.notes.toLowerCase().includes(q));
 
-  const totalSpecimenCount = Math.max(SEED_HIGHLIGHTS.length + localSpecimens.length, 128);
-  const totalValuation = '$148,250.00';
-  const totalCostBasis = '$114,800.00';
-  const portfolioRoi = '+29.1%';
+      return matchCountry && matchDenom && matchYear && matchPick && matchCondition && matchQuery;
+    });
+  }, [countryFilter, denomFilter, yearFilter, pickFilter, conditionFilter, searchQuery]);
+
+  const handleExport = (format: string) => {
+    setShowExportMenu(false);
+    toast.success(`Exporting inventory as ${format.toUpperCase()}...`);
+  };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Welcome & Top Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span>Specimen Collection Dashboard</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold border border-blue-200 dark:border-blue-800">
-              5+1 Multi-Source Engine
-            </span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Real-time physical inventory, Gemini Vision extraction, and defensible market valuation.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <Link
-            href="/capture"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Camera className="h-4 w-4" />
-            <span>Add New Note</span>
-          </Link>
-          <Link
-            href="/banknotes"
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 shadow-xs transition-colors"
-          >
-            <Banknote className="h-4 w-4 text-slate-500" />
-            <span>Full Inventory</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* Catalog Conflict Banner (If any) */}
-      <div className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 dark:border-amber-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 mt-0.5">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wide">
-              Catalog Discrepancy Detected for Specimen BN-000145
-            </h4>
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-              PMG Price Guide identifies <strong className="font-semibold text-slate-900 dark:text-white">P-327b</strong> vs Numista Catalog identifies <strong className="font-semibold text-slate-900 dark:text-white">P-327c</strong> (Watermark Type 2, Funaro / Sayad signatures).
-            </p>
-          </div>
-        </div>
-        <Link
-          href="/valuation"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 whitespace-nowrap bg-amber-100/80 dark:bg-amber-900/50 px-3 py-1.5 rounded-lg border border-amber-300 dark:border-amber-800 transition-colors"
-        >
-          <span>Review Evidence Matrix</span>
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Valuation */}
-        <div className="rounded-2xl p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs hover:border-blue-500/40 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Market Value</span>
-            <div className="h-8 w-8 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-400 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono tracking-tight">
-              {totalValuation}
-            </div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-              <ArrowUpRight className="h-3.5 w-3.5" />
-              <span>{portfolioRoi} overall ROI</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Cost Basis */}
-        <div className="rounded-2xl p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs hover:border-blue-500/40 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Cost Basis</span>
-            <div className="h-8 w-8 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-400 flex items-center justify-center">
-              <Scale className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono tracking-tight">
-              {totalCostBasis}
-            </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Acquisition investment
-            </p>
-          </div>
-        </div>
-
-        {/* Total Specimens */}
-        <div className="rounded-2xl p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs hover:border-blue-500/40 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Physical Specimens</span>
-            <div className="h-8 w-8 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-400 flex items-center justify-center">
-              <Banknote className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono tracking-tight">
-              {totalSpecimenCount.toLocaleString()}
-            </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Individual cataloged notes
-            </p>
-          </div>
-        </div>
-
-        {/* Sync & Ingestion Status */}
-        <div className="rounded-2xl p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs hover:border-blue-500/40 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Ingestion & Sync</span>
+    <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-300">
+      
+      {/* ========================================================================= */}
+      {/* TOP CATEGORY SWITCHER TABS (Banknotes, Sports Cards, Comics, etc.)        */}
+      {/* ========================================================================= */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {CATEGORIES.map((cat) => {
+          const isActive = activeCategory === cat.id;
+          const Icon = cat.icon;
+          return (
             <button
-              onClick={() => syncNow()}
-              title="Click to force sync"
-              className="h-8 w-8 rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex items-center justify-center transition-colors"
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                isActive
+                  ? 'bg-[#0a1931] text-white dark:bg-[#00246b] dark:text-blue-50 shadow-md shadow-slate-900/15'
+                  : 'bg-white dark:bg-[#0b132b] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-800 shadow-2xs hover:border-slate-400'
+              }`}
             >
-              <RefreshCw className="h-4 w-4" />
+              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`} />
+              <span>{cat.label}</span>
             </button>
-          </div>
-          <div className="mt-2">
-            <div className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span>{isOnline ? 'Online Synced' : 'Offline Storage'}</span>
-            </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {pendingCount} pending queue items
-            </p>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      {/* Feature Highlights Grid: Dual Ingestion, 5+1 Engine & Storage */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Rapid Dual Ingestion Card */}
-        <div className="rounded-3xl p-6 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
-            <Camera className="h-64 w-64 text-white" />
+      {/* ========================================================================= */}
+      {/* MAIN BANKNOTES CARD CONTAINER (High Contrast against App Shell BG)        */}
+      {/* ========================================================================= */}
+      <div className="bg-white dark:bg-[#0a1329] rounded-2xl border border-slate-300/90 dark:border-slate-800 shadow-sm p-4 sm:p-6 space-y-6">
+        
+        {/* Section Title Header */}
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[#002b80] dark:text-blue-400 shadow-2xs">
+            <Banknote className="h-5 w-5" />
           </div>
-
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-[11px] font-semibold backdrop-blur-md mb-4">
-              <Sparkles className="h-3.5 w-3.5 text-blue-200" />
-              <span>Zero-Friction Collector Capture</span>
-            </div>
-            <h3 className="text-xl font-bold tracking-tight mb-2">
-              Rapid Dual-Image Ingestion
-            </h3>
-            <p className="text-xs text-blue-100/90 leading-relaxed mb-6">
-              Shoot Front Photo → Flip → Shoot Back Photo. The engine automatically crops edges, cleans borders, splits serial prefixes, and triggers 40-field Gemini Vision analysis.
-            </p>
-          </div>
-
-          <Link
-            href="/capture"
-            className="w-full py-3 px-4 rounded-xl text-xs font-semibold bg-white text-blue-900 hover:bg-blue-50 shadow-md transition-all text-center flex items-center justify-center gap-2"
-          >
-            <Camera className="h-4 w-4 text-blue-600" />
-            <span>Launch Capture Kiosk</span>
-          </Link>
+          <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Banknotes
+          </h2>
         </div>
 
-        {/* 5+1 Defensible Valuation Engine */}
-        <div className="rounded-3xl p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-400 flex items-center justify-center">
-                  <Scale className="h-4 w-4" />
-                </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  5+1 Valuation Pipeline
-                </h3>
-              </div>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                Active
+        {/* ========================================================================= */}
+        {/* 5 SUMMARY STAT CARDS GRID (Uniform Deep Navy Color & Bigger Icons)         */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+          
+          {/* Card 1: Total Notes */}
+          <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#0f1a36] p-4 flex items-center gap-4 shadow-sm hover:border-slate-400 transition-colors">
+            <div className="text-[#002b80] dark:text-[#60a5fa] shrink-0">
+              <Banknote className="h-9 w-9 sm:h-10 sm:w-10 stroke-[1.6]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                Total Notes
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
+                18,700
               </span>
             </div>
-
-            <ul className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
-              <li className="flex items-center justify-between">
-                <span>1. PMG Price Guide</span>
-                <span className="text-[11px] text-slate-400">Baseline Anchor</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span>2. Heritage Auctions</span>
-                <span className="text-[11px] text-slate-400">Realized Sales</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span>3. Stack&apos;s Bowers</span>
-                <span className="text-[11px] text-slate-400">Auction History</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span>4. eBay SOLD Listings</span>
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Strict Sold Only</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span>5. Numista Catalog</span>
-                <span className="text-[11px] text-slate-400">Variety Verification</span>
-              </li>
-            </ul>
           </div>
 
-          <Link
-            href="/valuation"
-            className="mt-6 w-full py-2.5 px-4 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors text-center"
-          >
-            Explore Valuation Matrix
-          </Link>
-        </div>
-
-        {/* Physical Storage & Vault Coordinates */}
-        <div className="rounded-3xl p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-400 flex items-center justify-center">
-                  <Box className="h-4 w-4" />
-                </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Vault Storage Matrix
-                </h3>
-              </div>
-              <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400">
-                10,000 Cap
+          {/* Card 2: Countries */}
+          <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#0f1a36] p-4 flex items-center gap-4 shadow-sm hover:border-slate-400 transition-colors">
+            <div className="text-[#002b80] dark:text-[#60a5fa] shrink-0">
+              <Globe className="h-9 w-9 sm:h-10 sm:w-10 stroke-[1.6]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                Countries
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
+                142
               </span>
             </div>
+          </div>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Every physical banknote is tied directly to its physical vault coordinate: <code className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Box -&gt; Section -&gt; Slot</code>.
-            </p>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-600 dark:text-slate-300">Box 01 (World UNC Binders)</span>
-                <span className="text-blue-600 dark:text-blue-400 font-mono">82% Full</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full w-[82%]" />
-              </div>
-
-              <div className="flex justify-between text-xs font-medium pt-2">
-                <span className="text-slate-600 dark:text-slate-300">Box 02 (High-Value Slabs PMG)</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-mono">45% Full</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full w-[45%]" />
-              </div>
+          {/* Card 3: Different Notes */}
+          <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#0f1a36] p-4 flex items-center gap-4 shadow-sm hover:border-slate-400 transition-colors">
+            <div className="text-[#002b80] dark:text-[#60a5fa] shrink-0">
+              <Layers className="h-9 w-9 sm:h-10 sm:w-10 stroke-[1.6]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                Different Notes
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
+                3,850
+              </span>
             </div>
           </div>
 
-          <Link
-            href="/settings"
-            className="mt-6 w-full py-2.5 px-4 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors text-center"
-          >
-            Manage Storage & Diagnostics
-          </Link>
-        </div>
-      </div>
-
-      {/* Recent Specimen Highlights Section */}
-      <div className="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Recently Cataloged Physical Specimens</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live view of individual physical notes, grades, serial split, and market consensus.
-            </p>
+          {/* Card 4: Duplicates */}
+          <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#0f1a36] p-4 flex items-center gap-4 shadow-sm hover:border-slate-400 transition-colors">
+            <div className="text-[#002b80] dark:text-[#60a5fa] shrink-0">
+              <Copy className="h-9 w-9 sm:h-10 sm:w-10 stroke-[1.6]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                Duplicates
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
+                14,850
+              </span>
+            </div>
           </div>
 
-          <Link
-            href="/banknotes"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            <span>View All Inventory</span>
-            <ChevronRight className="h-4 w-4" />
-          </Link>
+          {/* Card 5: Estimated Value */}
+          <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#0f1a36] p-4 flex items-center gap-4 shadow-sm hover:border-slate-400 transition-colors col-span-2 sm:col-span-1">
+            <div className="text-[#002b80] dark:text-[#60a5fa] shrink-0">
+              <CircleDollarSign className="h-9 w-9 sm:h-10 sm:w-10 stroke-[1.6]" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                Estimated Value
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
+                $1,248,750
+              </span>
+            </div>
+          </div>
+
         </div>
 
-        {/* High Density Specimen Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        {/* ========================================================================= */}
+        {/* FILTER DROPDOWNS & SEARCH ROW (Distinct Light Theme Borders)              */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+          
+          {/* Country */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Country
+            </label>
+            <div className="relative">
+              <select
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+                className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
+              >
+                <option value="All">All</option>
+                <option value="Brazil">Brazil</option>
+                <option value="Argentina">Argentina</option>
+                <option value="Bolivia">Bolivia</option>
+                <option value="Mexico">Mexico</option>
+                <option value="India">India</option>
+                <option value="Canada">Canada</option>
+                <option value="United States">United States</option>
+              </select>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Denomination */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Denomination
+            </label>
+            <div className="relative">
+              <select
+                value={denomFilter}
+                onChange={(e) => setDenomFilter(e.target.value)}
+                className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
+              >
+                <option value="All">All</option>
+                <option value="10">10</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+              </select>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Year */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Year
+            </label>
+            <div className="relative">
+              <select
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
+              >
+                <option value="All">All</option>
+                <option value="1954">1954</option>
+                <option value="1981">1981</option>
+                <option value="1985">1985</option>
+                <option value="1993">1993</option>
+                <option value="2013">2013</option>
+              </select>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Pick # */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Pick #
+            </label>
+            <div className="relative">
+              <select
+                value={pickFilter}
+                onChange={(e) => setPickFilter(e.target.value)}
+                className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
+              >
+                <option value="All">All</option>
+                <option value="P-45a">P-45a</option>
+                <option value="P-198b">P-198b</option>
+                <option value="P-331a">P-331a</option>
+                <option value="P-164a">P-164a</option>
+                <option value="P-94d">P-94d</option>
+                <option value="P-540">P-540</option>
+              </select>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Condition */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Condition
+            </label>
+            <div className="relative">
+              <select
+                value={conditionFilter}
+                onChange={(e) => setConditionFilter(e.target.value)}
+                className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
+              >
+                <option value="All">All</option>
+                <option value="UNC">UNC</option>
+                <option value="AU">AU</option>
+                <option value="XF">XF</option>
+                <option value="VF">VF</option>
+              </select>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Search Banknotes */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Search Banknotes
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by country, denomination, year, pick #..."
+                className="w-full pl-3 pr-8 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-[#003399] shadow-2xs hover:border-slate-400 transition-colors"
+              />
+              <Search className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+        </div>
+
+        {/* ========================================================================= */}
+        {/* ACTION BUTTONS ROW (+ Add Note, Photograph Note, AI Identify, Export)      */}
+        {/* ========================================================================= */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+          
+          {/* Left Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            
+            {/* + Add Note (Solid Dark Blue) */}
+            <Link
+              href="/capture"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#003399] hover:bg-[#002b80] text-white text-xs font-bold shadow-xs transition-all active:scale-95"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Note</span>
+            </Link>
+
+            {/* Photograph Note (White/Bordered) */}
+            <Link
+              href="/capture"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-750 dark:text-slate-200 text-xs font-semibold transition-colors shadow-2xs hover:border-slate-400"
+            >
+              <Camera className="h-3.5 w-3.5 text-slate-500" />
+              <span>Photograph Note</span>
+            </Link>
+
+            {/* AI Identify (White/Bordered) */}
+            <Link
+              href="/capture"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-750 dark:text-slate-200 text-xs font-semibold transition-colors shadow-2xs hover:border-slate-400"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-[#003399] dark:text-blue-400" />
+              <span>AI Identify</span>
+            </Link>
+          </div>
+
+          {/* Right Action: Export / Print Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-750 dark:text-slate-200 text-xs font-semibold transition-colors shadow-2xs hover:border-slate-400"
+            >
+              <Printer className="h-3.5 w-3.5 text-slate-500" />
+              <span>Export / Print</span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 ml-1" />
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-1.5 w-44 rounded-xl bg-white dark:bg-[#0b132b] border border-slate-200 dark:border-slate-800 shadow-xl py-1.5 z-30 animate-in fade-in">
+                <button
+                  onClick={() => handleExport('json')}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Export as JSON
+                </button>
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Export as CSV / Excel
+                </button>
+                <button
+                  onClick={() => { setShowExportMenu(false); window.print(); }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border-t border-slate-100 dark:border-slate-800"
+                >
+                  Print Inventory Catalog
+                </button>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* ========================================================================= */}
+        {/* BANKNOTES DATA TABLE                                                      */}
+        {/* ========================================================================= */}
+        <div className="overflow-x-auto rounded-xl border border-slate-300 dark:border-slate-800 shadow-xs">
+          <table className="w-full text-left border-collapse bg-white dark:bg-[#0a1329]">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-medium">
-                <th className="pb-3 pl-2">Specimen ID</th>
-                <th className="pb-3">Country & Denomination</th>
-                <th className="pb-3">Catalog Pick #</th>
-                <th className="pb-3">Serial Split</th>
-                <th className="pb-3">Grade</th>
-                <th className="pb-3">Market Value</th>
-                <th className="pb-3">Storage Location</th>
-                <th className="pb-3 pr-2 text-right">Status</th>
+              <tr className="bg-[#f8fafc] dark:bg-slate-800/80 border-b border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold">
+                <th className="py-3 px-4 text-center w-48">Photo</th>
+                <th className="py-3 px-4">Country</th>
+                <th className="py-3 px-4">Denomination</th>
+                <th className="py-3 px-4">Year</th>
+                <th className="py-3 px-4">Pick #</th>
+                <th className="py-3 px-4">Condition</th>
+                <th className="py-3 px-4 text-center">Qty</th>
+                <th className="py-3 px-4">Value</th>
+                <th className="py-3 px-4 text-center">Special</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {SEED_HIGHLIGHTS.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
-                  <td className="py-3.5 pl-2 font-mono font-bold text-blue-600 dark:text-blue-400">
-                    <Link href={`/banknotes`} className="hover:underline">
-                      {item.id}
-                    </Link>
-                  </td>
-                  <td className="py-3.5">
-                    <div className="font-semibold text-slate-900 dark:text-white">
-                      {item.country}
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+              {filteredNotes.map((note) => (
+                <tr
+                  key={note.id}
+                  onClick={() => setInspectSpecimen(note)}
+                  className="hover:bg-[#f1f5f9]/80 dark:hover:bg-blue-950/20 transition-colors cursor-pointer group"
+                >
+                  {/* Photo Column: Side-by-Side Front & Back Mini Images */}
+                  <td className="py-2.5 px-3">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <div className="h-10 w-16 rounded overflow-hidden bg-slate-100 border border-slate-300 dark:border-slate-700 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                        <img
+                          src={note.frontImage}
+                          alt={`${note.country} Front`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="h-10 w-16 rounded overflow-hidden bg-slate-100 border border-slate-300 dark:border-slate-700 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                        <img
+                          src={note.backImage}
+                          alt={`${note.country} Back`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {item.denomination} ({item.year})
+                  </td>
+
+                  {/* Country Column (Flag + Name) */}
+                  <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base leading-none" role="img" aria-label={note.country}>
+                        {note.countryFlag}
+                      </span>
+                      <span>{note.country}</span>
                     </div>
                   </td>
-                  <td className="py-3.5 font-mono text-slate-700 dark:text-slate-300">
-                    {item.pick}
+
+                  {/* Denomination Column */}
+                  <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
+                    {note.denomination}
                   </td>
-                  <td className="py-3.5 font-mono text-slate-600 dark:text-slate-400">
-                    {item.serial}
+
+                  {/* Year Column */}
+                  <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
+                    {note.year === '—' ? (
+                      <span className="text-rose-500 font-bold">—</span>
+                    ) : (
+                      note.year
+                    )}
                   </td>
-                  <td className="py-3.5">
-                    <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
-                      {item.grade}
+
+                  {/* Pick # Column */}
+                  <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
+                    {note.pickNumber === '—' ? (
+                      <span className="text-rose-500 font-bold">—</span>
+                    ) : (
+                      note.pickNumber
+                    )}
+                  </td>
+
+                  {/* Condition Column */}
+                  <td className="py-3 px-4">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {note.condition}
                     </span>
                   </td>
-                  <td className="py-3.5 font-mono font-semibold text-slate-900 dark:text-white">
-                    {item.value}
+
+                  {/* Qty Column */}
+                  <td className="py-3 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                    {note.qty}
                   </td>
-                  <td className="py-3.5 text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                    {item.box}
+
+                  {/* Value Column */}
+                  <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                    {note.value === '—' ? (
+                      <span className="text-rose-500 font-bold">—</span>
+                    ) : (
+                      note.value
+                    )}
                   </td>
-                  <td className="py-3.5 pr-2 text-right">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${item.status === 'CONFIRMED'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
-                        }`}
-                    >
-                      {item.confidence}
-                    </span>
+
+                  {/* Special Column (Star, Green Check, Red Exclamation) */}
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
+                      {note.isSpecial && (
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+                      )}
+                      {note.isVerified && (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      )}
+                      {note.hasMissingInfo && (
+                        <AlertCircle className="h-4 w-4 text-rose-500 fill-rose-50 dark:fill-rose-950/40" />
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* ========================================================================= */}
+        {/* PAGINATION & FOOTER                                                       */}
+        {/* ========================================================================= */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 text-xs text-slate-600 dark:text-slate-400">
+          
+          {/* Total info */}
+          <div>
+            Showing 1 to {filteredNotes.length} of 18,700 notes
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-1">
+            <button
+              className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+              title="First page"
+            >
+              <ChevronsLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+              title="Previous page"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+
+            <button className="h-7 w-7 rounded-lg bg-[#003399] text-white font-bold flex items-center justify-center shadow-xs">
+              1
+            </button>
+            <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
+              2
+            </button>
+            <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
+              3
+            </button>
+            <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
+              4
+            </button>
+            <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
+              5
+            </button>
+
+            <button
+              className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+              title="Next page"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+              title="Last page"
+            >
+              <ChevronsRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Per Page Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <select
+              defaultValue="25"
+              className="px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-800 dark:text-slate-200 font-medium outline-none shadow-2xs"
+            >
+              <option value="10">10 per page</option>
+              <option value="25">25 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+            </select>
+          </div>
+
+        </div>
+
       </div>
+
+      {/* ========================================================================= */}
+      {/* HIGH-RES SPECIMEN INSPECTOR MODAL                                         */}
+      {/* ========================================================================= */}
+      {inspectSpecimen && (
+        <div
+          onClick={() => setInspectSpecimen(null)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-3xl bg-white dark:bg-[#0b132b] rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl leading-none">{inspectSpecimen.countryFlag}</span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {inspectSpecimen.country} {inspectSpecimen.denomination} ({inspectSpecimen.year})
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Pick #{inspectSpecimen.pickNumber} | Serial: {inspectSpecimen.serialNumber || 'N/A'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setInspectSpecimen(null)}
+                className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="rounded-xl overflow-hidden border-2 border-blue-500/50 bg-slate-100 dark:bg-slate-900">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                  Front Specimen Scan
+                </span>
+                <img
+                  src={inspectSpecimen.frontImage}
+                  alt="Front Scan"
+                  className="w-full h-48 object-cover"
+                />
+              </div>
+
+              <div className="rounded-xl overflow-hidden border-2 border-blue-500/50 bg-slate-100 dark:bg-slate-900">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                  Back Specimen Scan
+                </span>
+                <img
+                  src={inspectSpecimen.backImage}
+                  alt="Back Scan"
+                  className="w-full h-48 object-cover"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 dark:bg-[#111c3d] p-3 rounded-xl text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Condition</span>
+                <span className="font-bold text-emerald-600">{inspectSpecimen.condition}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Quantity</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{inspectSpecimen.qty} notes</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Estimated Value</span>
+                <span className="font-bold font-mono text-slate-900 dark:text-white">{inspectSpecimen.value}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Special Tag</span>
+                <span className="font-bold text-amber-500">{inspectSpecimen.isSpecial ? '⭐ Valuable Item' : 'Standard Specimen'}</span>
+              </div>
+            </div>
+
+            {inspectSpecimen.notes && (
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#111c3d] text-xs space-y-1">
+                <span className="font-bold text-slate-900 dark:text-white block">Specimen Notes:</span>
+                <p className="text-slate-600 dark:text-slate-300">{inspectSpecimen.notes}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

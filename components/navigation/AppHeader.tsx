@@ -49,10 +49,10 @@ export function AppHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-[#0b132b]/90 backdrop-blur-md transition-colors">
+    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0a1329] backdrop-blur-md transition-colors">
       <div className="flex h-16 items-center justify-between px-3 sm:px-5 lg:px-7">
         {/* Left: Brand & Mobile Drawer Toggle */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           {/* Mobile Drawer Trigger (Mobile Only) */}
           <button
             onClick={onToggleMobileDrawer}
@@ -62,86 +62,84 @@ export function AppHeader({
             <Menu className="h-5 w-5" />
           </button>
 
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-[#0052e0] to-[#0070f3] flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <Layers className="h-5 w-5" />
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="h-10 w-10 rounded-xl bg-[#0a1931] dark:bg-[#00246b] flex items-center justify-center text-white shadow-sm border border-blue-900/40 group-hover:scale-105 transition-transform">
+              <svg className="h-5 w-5 text-white fill-current" viewBox="0 0 24 24">
+                <path d="M12 1L2 6v2h20V6L12 1zm-7 8v9h3v-9H5zm5 0v9h4v-9h-4zm6 0v9h3v-9h-3zM2 20v2h20v-2H2z"/>
+              </svg>
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-sm sm:text-base tracking-tight text-slate-900 dark:text-white">
-                  Banknote Vault
-                </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-[#0052e0] dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                  AI v2.5
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block -mt-0.5">
-                Specimen Collection & 5+1 Valuation
-              </p>
+              <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">
+                My Collections
+              </span>
             </div>
           </Link>
         </div>
 
-        {/* Center: Omnibox Search (Desktop & Tablet) */}
-        <div className="hidden md:flex flex-1 max-w-md mx-6">
-          <form onSubmit={handleSearch} className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Pick #, Country, Serial, Denomination..."
-              className="w-full pl-9 pr-12 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-800/80 border border-transparent focus:border-[#0052e0] focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 transition-all outline-none"
-            />
-            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-white dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 rounded">
-              ↵
-            </kbd>
-          </form>
-        </div>
+        {/* Right: Actions, Search, Add Item, Settings, Backup Status */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Search Trigger */}
+          <div className="hidden md:flex items-center">
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-blue-600 outline-none w-32 focus:w-48 transition-all"
+              />
+            </form>
+          </div>
 
-        {/* Right: Actions, Sync & Auth */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Network / Sync Status Indicator */}
-          <button
-            onClick={() => syncNow()}
-            title={isOnline ? (isWifi ? 'Online via Wi-Fi (Click to sync)' : 'Online via Cellular') : 'Offline (Local IDB storage active)'}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            {isOnline ? (
-              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                <Wifi className="h-3.5 w-3.5 animate-pulse" />
-                <span className="hidden xl:inline">{isWifi ? 'Wi-Fi' : 'Cellular'}</span>
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                <WifiOff className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">Offline</span>
-              </span>
-            )}
-            {pendingCount > 0 && (
-              <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[#0052e0] text-white">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-
-          {/* Quick Capture Button */}
+          {/* + Add Item Button */}
           <Link
             href="/capture"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#0052e0] to-[#0070f3] hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-xs shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-blue-600/90 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold transition-all shadow-xs"
           >
-            <Camera className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Add Note</span>
+            <span>+</span>
+            <span>Add Item</span>
           </Link>
 
-          {/* User Profile / Auth Menu */}
+          {/* Settings Button */}
+          <Link
+            href="/settings"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold border border-slate-200 dark:border-slate-700/80 transition-colors"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
+            <span>Settings</span>
+          </Link>
+
+          {/* Backup Status Card */}
+          <div 
+            onClick={() => syncNow()}
+            title="Click to trigger cloud backup sync"
+            className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-50 dark:bg-[#111c3d]/80 border border-slate-200 dark:border-slate-700/80 hover:border-emerald-500 transition-colors"
+          >
+            <div className="relative">
+              <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+              </svg>
+              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#111c3d]" />
+            </div>
+            <div className="text-left hidden sm:block">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider leading-tight">
+                Backup Status
+              </span>
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block leading-tight">
+                {isOnline ? 'All backed up' : 'Offline local'}
+              </span>
+            </div>
+          </div>
+
+          {/* User Profile / Auth */}
           <div className="relative">
             {status === 'authenticated' && session?.user ? (
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="flex items-center gap-1.5 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
-                <div className="h-8 w-8 rounded-lg bg-[#0052e0] text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                <div className="h-8 w-8 rounded-lg bg-[#0052e0] text-white flex items-center justify-center text-xs font-bold shadow-xs">
                   {session.user.name ? session.user.name.charAt(0).toUpperCase() : 'C'}
                 </div>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 hidden sm:block" />
@@ -149,10 +147,9 @@ export function AppHeader({
             ) : (
               <button
                 onClick={() => signIn('credentials', { email: 'collector@banknote.dev', password: 'demo', callbackUrl: '/' })}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 shadow-sm transition-all"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <User className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Demo Login</span>
               </button>
             )}
 
