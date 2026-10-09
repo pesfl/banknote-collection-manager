@@ -11,6 +11,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
+  // Automatically close mobile drawer upon route navigation
+  useEffect(() => {
+    setIsMobileDrawerOpen(false);
+  }, [pathname]);
+
   // Load saved sidebar state from localStorage on mount
   useEffect(() => {
     try {

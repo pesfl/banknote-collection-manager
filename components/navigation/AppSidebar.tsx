@@ -80,6 +80,18 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
 
+  // Prevent background body scroll when mobile drawer is open
+  React.useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
+
   const isActive = (href: string) => {
     if (href === '/') {
       return pathname === '/' || pathname === '/dashboard';
@@ -89,26 +101,37 @@ export function AppSidebar({
 
   return (
     <>
-      {/* Mobile Overlay */}
-      {isMobileOpen && (
-        <div
-          onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-xs lg:hidden animate-in fade-in"
-        />
-      )}
+      {/* Mobile Backdrop Overlay */}
+      <div
+        onClick={onCloseMobile}
+        aria-hidden={!isMobileOpen}
+        className={clsx(
+          'fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300 lg:hidden',
+          isMobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        )}
+      />
 
       {/* Sidebar Container */}
       <aside
+        aria-label="Application Navigation"
         className={clsx(
-          'fixed lg:sticky top-0 lg:top-16 z-50 lg:z-30 h-full lg:h-[calc(100vh-4rem)] flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#0b132b]/95 backdrop-blur-md transition-all duration-300 ease-in-out flex shrink-0',
-          // Desktop Width
-          isCollapsed ? 'lg:w-[72px]' : 'lg:w-64',
-          // Mobile Visibility
-          isMobileOpen ? 'left-0 w-64' : '-left-64 lg:left-0'
+          // Base & Common Layout
+          'top-0 left-0 z-50 flex flex-col justify-between border-r border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0b132b] backdrop-blur-md transition-all duration-300 ease-in-out shrink-0',
+          
+          // Mobile (<lg): Fixed drawer full height off-canvas
+          'fixed h-screen w-72 max-w-[82vw] lg:h-[calc(100vh-4rem)] lg:sticky lg:top-16 lg:z-30',
+          
+          // Mobile Visibility & GPU Transform
+          isMobileOpen
+            ? 'translate-x-0 opacity-100 visible shadow-2xl pointer-events-auto'
+            : '-translate-x-full opacity-0 invisible pointer-events-none lg:translate-x-0 lg:opacity-100 lg:visible lg:pointer-events-auto lg:shadow-none',
+          
+          // Desktop Width (collapsed rail vs full)
+          isCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
         )}
       >
         {/* Top Section */}
-        <div className="flex flex-col gap-4 p-3 sm:p-3.5">
+        <div className="flex flex-col gap-4 p-3 sm:p-3.5 overflow-y-auto">
           {/* Mobile Drawer Header */}
           <div className="flex items-center justify-between lg:hidden pb-2.5 border-b border-slate-200 dark:border-slate-800">
             <span className="font-bold text-xs text-slate-900 dark:text-white uppercase tracking-wider">
