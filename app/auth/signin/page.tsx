@@ -7,15 +7,36 @@ import Link from 'next/link';
 import { Layers, ShieldCheck, Sparkles, ArrowRight, Lock, Mail } from 'lucide-react';
 import { AnimatedThemeToggler } from '@/registry/magicui/animated-theme-toggler';
 
+function getFriendlyAuthError(errorCode?: string | null): string {
+  if (!errorCode) return '';
+  switch (errorCode) {
+    case 'OAuthSignin':
+      return 'Could not construct Google OAuth sign-in URL. Check your Google Client ID & Secret in .env.local.';
+    case 'OAuthCallback':
+      return 'Google callback failed. Verify that "http://localhost:3000/api/auth/callback/google" is added to Authorized Redirect URIs in Google Cloud Console.';
+    case 'OAuthCreateAccount':
+      return 'Could not create account from Google profile.';
+    case 'AccessDenied':
+      return 'Access denied. If your Google Cloud app is in "Testing" mode, ensure your Google email is added to the "Test Users" list.';
+    case 'Configuration':
+      return 'Server authentication configuration error. Restart your dev server to load updated .env.local variables.';
+    case 'Callback':
+      return 'Authentication callback error. Please try again.';
+    default:
+      return `Authentication issue (${errorCode}). Please check your Google Console settings.`;
+  }
+}
+
 function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const urlError = searchParams.get('error');
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(getFriendlyAuthError(urlError));
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,14 +81,11 @@ function SignInContent() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     setIsLoading(true);
-    try {
-      await signIn('google', { callbackUrl });
-    } catch (err) {
-      setErrorMessage('Failed to initiate Google authentication');
-      setIsLoading(false);
-    }
+    setErrorMessage('');
+    // Direct top-level NextAuth Google sign-in
+    signIn('google', { callbackUrl });
   };
 
   return (
