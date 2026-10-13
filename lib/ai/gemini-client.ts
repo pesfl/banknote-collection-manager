@@ -1,7 +1,56 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AIExtraction } from '@/types';
 
-const client = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+function getGeminiClient(): GoogleGenerativeAI {
+  let apiKey =
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    '';
+  apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
+  return new GoogleGenerativeAI(apiKey);
+}
+
+const SUPPORTED_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.6-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+];
+
+function cleanString(val?: any): string | undefined {
+  if (val === null || val === undefined) return undefined;
+  const s = String(val).trim();
+  return s.length > 0 && s.toLowerCase() !== 'null' ? s : undefined;
+}
+
+function parseGrade(g?: any): 'UNC' | 'AU' | 'XF' | 'VF' | 'F' | 'VG' | 'G' | 'Unknown' | undefined {
+  if (!g) return undefined;
+  const upper = String(g).toUpperCase().trim();
+  if (upper.includes('UNC') || upper.includes('UNCIRCULATED')) return 'UNC';
+  if (upper.includes('AU') || upper.includes('ABOUT UNCIRCULATED')) return 'AU';
+  if (upper.includes('XF') || upper.includes('EF') || upper.includes('EXTRA FINE')) return 'XF';
+  if (upper.includes('VF') || upper.includes('VERY FINE')) return 'VF';
+  if (upper.includes('VG') || upper.includes('VERY GOOD')) return 'VG';
+  if (upper.includes('F') || upper.includes('FINE')) return 'F';
+  if (upper.includes('G') || upper.includes('GOOD')) return 'G';
+  return 'Unknown';
+}
+
+function parseFancySerial(f?: any): 'Solid' | 'Radar' | 'Ladder' | 'Binary' | 'Repeater' | 'LowNumber' | 'HighNumber' | 'Sequential' | 'None' | 'Unknown' | undefined {
+  if (!f) return undefined;
+  const upper = String(f).toUpperCase().trim();
+  if (upper.includes('SOLID')) return 'Solid';
+  if (upper.includes('RADAR')) return 'Radar';
+  if (upper.includes('LADDER')) return 'Ladder';
+  if (upper.includes('BINARY')) return 'Binary';
+  if (upper.includes('REPEATER')) return 'Repeater';
+  if (upper.includes('LOW')) return 'LowNumber';
+  if (upper.includes('HIGH')) return 'HighNumber';
+  if (upper.includes('SEQ')) return 'Sequential';
+  if (upper.includes('NONE')) return 'None';
+  return 'Unknown';
+}
 
 /**
  * Extract banknote details from front and back images using Gemini Vision
@@ -11,7 +60,7 @@ export async function extractBanknoteDetails(
   backImageBase64: string
 ): Promise<AIExtraction> {
   try {
-    const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const client = getGeminiClient();
 
     const extractionPrompt = `You are a numismatic expert. Analyze these banknote images (front and back) and extract the following information in JSON format.
 
@@ -44,25 +93,40 @@ Return ONLY a valid JSON object (no markdown, no explanation) with these fields:
 
 If any field cannot be determined, use null. Be accurate and conservative - only include information you can clearly see.`;
 
-    const response = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: frontImageBase64,
-        },
-      },
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: backImageBase64,
-        },
-      },
-      {
-        text: extractionPrompt,
-      },
-    ]);
+    let responseText = '';
+    let lastError: any = null;
 
-    const responseText = response.response.text();
+    for (const modelName of SUPPORTED_MODELS) {
+      try {
+        const model = client.getGenerativeModel({ model: modelName });
+        const response = await model.generateContent([
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: frontImageBase64,
+            },
+          },
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: backImageBase64,
+            },
+          },
+          {
+            text: extractionPrompt,
+          },
+        ]);
+        responseText = response.response.text();
+        if (responseText) break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Gemini] Model ${modelName} call failed, trying fallback:`, err?.message || err);
+      }
+    }
+
+    if (!responseText) {
+      throw lastError || new Error('All Gemini model fallbacks failed to generate content');
+    }
 
     // Parse JSON from response
     let extractedData: Partial<AIExtraction>;
@@ -78,31 +142,31 @@ If any field cannot be determined, use null. Be accurate and conservative - only
       throw new Error('Failed to parse AI extraction response');
     }
 
-    // Merge with defaults to ensure all fields present
+    // Merge with defaults and sanitize all fields
     const result: AIExtraction = {
-      countryOfOrigin: extractedData.countryOfOrigin || 'Unknown',
-      denomination: extractedData.denomination || 'Unknown',
-      currency: extractedData.currency || 'Unknown',
-      pickNumber: extractedData.pickNumber,
-      issueYear: extractedData.issueYear,
-      seriesDate: extractedData.seriesDate,
-      fullSerialNumber: extractedData.fullSerialNumber,
-      serialPrefix: extractedData.serialPrefix,
-      serialNumeric: extractedData.serialNumeric,
-      serialSuffix: extractedData.serialSuffix,
-      signature1Name: extractedData.signature1Name,
-      signature1Title: extractedData.signature1Title,
-      signature2Name: extractedData.signature2Name,
-      signature2Title: extractedData.signature2Title,
-      watermarks: extractedData.watermarks,
-      securityFeatures: extractedData.securityFeatures,
-      conditionGrade: extractedData.conditionGrade,
-      machineEstimatedGrade: extractedData.machineEstimatedGrade,
-      fancySerialType: extractedData.fancySerialType,
-      isReplacementNote: extractedData.isReplacementNote || false,
-      errorType: extractedData.errorType,
-      defectsAndAnomalies: extractedData.defectsAndAnomalies,
-      notes: extractedData.notes,
+      countryOfOrigin: cleanString(extractedData.countryOfOrigin) || 'Unknown',
+      denomination: cleanString(extractedData.denomination) || 'Unknown',
+      currency: cleanString(extractedData.currency) || 'Unknown',
+      pickNumber: cleanString(extractedData.pickNumber),
+      issueYear: cleanString(extractedData.issueYear),
+      seriesDate: cleanString(extractedData.seriesDate),
+      fullSerialNumber: cleanString(extractedData.fullSerialNumber),
+      serialPrefix: cleanString(extractedData.serialPrefix),
+      serialNumeric: cleanString(extractedData.serialNumeric),
+      serialSuffix: cleanString(extractedData.serialSuffix),
+      signature1Name: cleanString(extractedData.signature1Name),
+      signature1Title: cleanString(extractedData.signature1Title),
+      signature2Name: cleanString(extractedData.signature2Name),
+      signature2Title: cleanString(extractedData.signature2Title),
+      watermarks: cleanString(extractedData.watermarks),
+      securityFeatures: cleanString(extractedData.securityFeatures),
+      conditionGrade: parseGrade(extractedData.conditionGrade),
+      machineEstimatedGrade: parseGrade(extractedData.machineEstimatedGrade),
+      fancySerialType: parseFancySerial(extractedData.fancySerialType),
+      isReplacementNote: Boolean(extractedData.isReplacementNote),
+      errorType: cleanString(extractedData.errorType),
+      defectsAndAnomalies: cleanString(extractedData.defectsAndAnomalies),
+      notes: cleanString(extractedData.notes),
     };
 
     return result;

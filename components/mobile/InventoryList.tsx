@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getRecentSpecimens, getSpecimenCountByStatus } from '@/lib/offline/idb';
+import { getRecentSpecimens, getSpecimenCountByStatus, deleteSpecimen, updateSpecimen } from '@/lib/offline/idb';
+import { cleanBanknoteImage } from '@/lib/media/banknote-cleaner';
+import PhotoAdjusterModal from './PhotoAdjusterModal';
 import type { LocalSpecimen } from '@/types';
 import InventoryCard from './InventoryCard';
 import SyncPanel from './SyncPanel';
+import { toast } from 'sonner';
+import { Trash2 } from 'lucide-react';
 
 export default function InventoryList() {
   const [specimens, setSpecimens] = useState<LocalSpecimen[]>([]);
@@ -105,9 +109,11 @@ export default function InventoryList() {
       {/* Specimen Details Modal (if selected) */}
       {selectedId && (
         <SpecimenDetailModal
+          key={selectedId}
           specimenId={selectedId}
           onClose={() => setSelectedId(null)}
           specimens={specimens}
+          onDelete={loadSpecimens}
         />
       )}
     </div>
@@ -118,19 +124,177 @@ interface SpecimenDetailModalProps {
   specimenId: string;
   onClose: () => void;
   specimens: LocalSpecimen[];
+  onDelete: () => void;
 }
 
 function SpecimenDetailModal({
   specimenId,
   onClose,
   specimens,
+  onDelete,
 }: SpecimenDetailModalProps) {
   const specimen = specimens.find(s => s.id === specimenId);
 
   if (!specimen) return null;
 
-  const frontUrl = URL.createObjectURL(specimen.frontImageBlob);
-  const backUrl = URL.createObjectURL(specimen.backImageBlob);
+  const [activeFrontBlob, setActiveFrontBlob] = useState<Blob>(specimen.frontImageBlob);
+  const [activeBackBlob, setActiveBackBlob] = useState<Blob>(specimen.backImageBlob);
+  const [frontUrl, setFrontUrl] = useState<string>(() => URL.createObjectURL(specimen.frontImageBlob));
+  const [backUrl, setBackUrl] = useState<string>(() => URL.createObjectURL(specimen.backImageBlob));
+
+  const [isFixing, setIsFixing] = useState(false);
+  const [adjustingSide, setAdjustingSide] = useState<'front' | 'back' | null>(null);
+
+  const handleAutoFixSide = async (side: 'front' | 'back') => {
+    if (!specimen) return;
+    const blobToClean = side === 'front' ? activeFrontBlob : activeBackBlob;
+    setIsFixing(true);
+    try {
+      toast.info(`Straightening and cropping ${side} photo...`);
+      const cleanRes = await cleanBanknoteImage(blobToClean, {
+        autoStraighten: true,
+        autoCropEdges: true,
+        autoRotateLandscape: false,
+        cropMarginPercent: 0,
+        enhanceClarity: false,
+      });
+
+      if (cleanRes && cleanRes.cleanedBlob) {
+        if (side === 'front') {
+          setActiveFrontBlob(cleanRes.cleanedBlob);
+          setFrontUrl(cleanRes.dataUrl);
+          await updateSpecimen({
+            ...specimen,
+            frontImageBlob: cleanRes.cleanedBlob,
+            backImageBlob: activeBackBlob,
+          });
+        } else {
+          setActiveBackBlob(cleanRes.cleanedBlob);
+          setBackUrl(cleanRes.dataUrl);
+          await updateSpecimen({
+            ...specimen,
+            frontImageBlob: activeFrontBlob,
+            backImageBlob: cleanRes.cleanedBlob,
+          });
+        }
+        toast.success(`✨ ${side === 'front' ? 'Front' : 'Back'} photo cleaned and saved!`);
+        onDelete();
+      }
+    } catch {
+      toast.error(`Could not fix ${side} image automatically`);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  const handleFixImages = async () => {
+    if (!specimen) return;
+    setIsFixing(true);
+    try {
+      toast.info('Straightening and cropping both note images...');
+      const [cleanFront, cleanBack] = await Promise.all([
+        cleanBanknoteImage(activeFrontBlob, {
+          autoStraighten: true,
+          autoCropEdges: true,
+          autoRotateLandscape: false,
+          cropMarginPercent: 0,
+          enhanceClarity: false,
+        }),
+        cleanBanknoteImage(activeBackBlob, {
+          autoStraighten: true,
+          autoCropEdges: true,
+          autoRotateLandscape: false,
+          cropMarginPercent: 0,
+          enhanceClarity: false,
+        }),
+      ]);
+
+      setActiveFrontBlob(cleanFront.cleanedBlob);
+      setActiveBackBlob(cleanBack.cleanedBlob);
+      setFrontUrl(cleanFront.dataUrl);
+      setBackUrl(cleanBack.dataUrl);
+
+      await updateSpecimen({
+        ...specimen,
+        frontImageBlob: cleanFront.cleanedBlob,
+        backImageBlob: cleanBack.cleanedBlob,
+      });
+
+      toast.success('✨ Both specimen images straightened and cropped!');
+      onDelete(); // Refresh inventory list items
+    } catch {
+      toast.error('Could not fix specimen images');
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  const handleResetOriginal = async (side: 'front' | 'back') => {
+    if (!specimen) return;
+    try {
+      if (side === 'front') {
+        setActiveFrontBlob(specimen.frontImageBlob);
+        setFrontUrl(URL.createObjectURL(specimen.frontImageBlob));
+        await updateSpecimen({
+          ...specimen,
+          frontImageBlob: specimen.frontImageBlob,
+          backImageBlob: activeBackBlob,
+        });
+      } else {
+        setActiveBackBlob(specimen.backImageBlob);
+        setBackUrl(URL.createObjectURL(specimen.backImageBlob));
+        await updateSpecimen({
+          ...specimen,
+          frontImageBlob: activeFrontBlob,
+          backImageBlob: specimen.backImageBlob,
+        });
+      }
+      toast.success(`Reset ${side} photo to original`);
+      onDelete();
+    } catch {
+      toast.error(`Could not reset ${side} photo`);
+    }
+  };
+
+  const handleApplyAdjustment = async (cleanedBlob: Blob, cleanedPreview: string) => {
+    if (!specimen || !adjustingSide) return;
+    try {
+      if (adjustingSide === 'front') {
+        setActiveFrontBlob(cleanedBlob);
+        setFrontUrl(cleanedPreview);
+        await updateSpecimen({
+          ...specimen,
+          frontImageBlob: cleanedBlob,
+          backImageBlob: activeBackBlob,
+        });
+      } else {
+        setActiveBackBlob(cleanedBlob);
+        setBackUrl(cleanedPreview);
+        await updateSpecimen({
+          ...specimen,
+          frontImageBlob: activeFrontBlob,
+          backImageBlob: cleanedBlob,
+        });
+      }
+      toast.success(`✨ ${adjustingSide === 'front' ? 'Front' : 'Back'} photo updated and saved!`);
+      onDelete();
+    } catch {
+      toast.error('Failed to save adjusted photo');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to permanently delete this specimen?')) return;
+    try {
+      await deleteSpecimen(specimen.id);
+      await fetch(`/api/banknotes/${specimen.id}`, { method: 'DELETE' }).catch(() => {});
+      toast.success('Specimen permanently deleted');
+      onDelete();
+      onClose();
+    } catch (err) {
+      toast.error('Failed to delete specimen');
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
@@ -145,32 +309,105 @@ function SpecimenDetailModal({
 
         {/* Title */}
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 pr-8">
-          {specimen.extractedData?.country || 'Unknown'} •{' '}
+          {(specimen.extractedData as any)?.countryOfOrigin || specimen.extractedData?.country || 'Unknown'} •{' '}
           {specimen.extractedData?.denomination || '—'}
         </h2>
 
-        {/* Images */}
-        <div className="space-y-4 mb-6">
-          <div>
-            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-              Front
-            </p>
+        {/* Images & Edit Menu */}
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              Specimen Photos
+            </span>
+            {isFixing ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 animate-pulse">
+                🪄 Optimizing edges...
+              </span>
+            ) : null}
+          </div>
+
+          {/* Quick Auto-Fix Both Button */}
+          <button
+            type="button"
+            onClick={handleFixImages}
+            disabled={isFixing}
+            className="w-full py-2.5 px-4 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+          >
+            <span className={isFixing ? 'animate-spin' : ''}>🪄</span>
+            <span>{isFixing ? 'Auto-Fixing Images...' : 'Auto-Fix Both Images (Crop & Straighten)'}</span>
+          </button>
+
+          {/* Front Photo Card */}
+          <div className="relative bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xs">
+            <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Front Specimen</p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleResetOriginal('front')}
+                  className="px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                  title="Restore original unedited photo"
+                >
+                  <span>↺ Reset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoFixSide('front')}
+                  disabled={isFixing}
+                  className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <span>🪄 Fix Image</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustingSide('front')}
+                  className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <span>✂️ Adjust</span>
+                </button>
+              </div>
+            </div>
             <img
               src={frontUrl}
               alt="Front"
-              className="w-full rounded-lg"
-              onLoad={() => URL.revokeObjectURL(frontUrl)}
+              className="w-full h-44 sm:h-48 object-contain bg-slate-950/40 p-2"
             />
           </div>
-          <div>
-            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-              Back
-            </p>
+
+          {/* Back Photo Card */}
+          <div className="relative bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xs">
+            <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Back Specimen</p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleResetOriginal('back')}
+                  className="px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                  title="Restore original unedited photo"
+                >
+                  <span>↺ Reset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoFixSide('back')}
+                  disabled={isFixing}
+                  className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <span>🪄 Fix Image</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustingSide('back')}
+                  className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <span>✂️ Adjust</span>
+                </button>
+              </div>
+            </div>
             <img
               src={backUrl}
               alt="Back"
-              className="w-full rounded-lg"
-              onLoad={() => URL.revokeObjectURL(backUrl)}
+              className="w-full h-44 sm:h-48 object-contain bg-slate-950/40 p-2"
             />
           </div>
         </div>
@@ -191,8 +428,23 @@ function SpecimenDetailModal({
             label="Captured"
             value={new Date(specimen.capturedAt).toLocaleString()}
           />
-          {specimen.notes && (
-            <DetailRow label="Notes" value={specimen.notes} isLong />
+          {((specimen.extractedData as any)?.fullSerialNumber || (specimen.extractedData as any)?.serialNumeric) && (
+            <DetailRow
+              label="Serial #"
+              value={(specimen.extractedData as any)?.fullSerialNumber || (specimen.extractedData as any)?.serialNumeric}
+            />
+          )}
+          {((specimen.extractedData as any)?.issueYear || (specimen.extractedData as any)?.seriesDate) && (
+            <DetailRow
+              label="Issue Year"
+              value={[(specimen.extractedData as any)?.issueYear, (specimen.extractedData as any)?.seriesDate].filter(Boolean).join(' / ')}
+            />
+          )}
+          {(specimen.extractedData as any)?.conditionGrade && (
+            <DetailRow
+              label="Grade"
+              value={(specimen.extractedData as any)?.conditionGrade}
+            />
           )}
           {specimen.extractedData?.pickNumber && (
             <DetailRow
@@ -200,17 +452,68 @@ function SpecimenDetailModal({
               value={specimen.extractedData.pickNumber}
             />
           )}
+          {(specimen.extractedData as any)?.fancySerialType && (specimen.extractedData as any)?.fancySerialType !== 'None' && (
+            <DetailRow
+              label="Fancy Serial"
+              value={(specimen.extractedData as any)?.fancySerialType}
+            />
+          )}
+          {((specimen.extractedData as any)?.signature1Name || (specimen.extractedData as any)?.signature2Name) && (
+            <DetailRow
+              label="Signatures"
+              value={[(specimen.extractedData as any)?.signature1Name, (specimen.extractedData as any)?.signature2Name].filter(Boolean).join('; ')}
+              isLong
+            />
+          )}
+          {(specimen.extractedData as any)?.watermarks && (
+            <DetailRow
+              label="Watermarks"
+              value={(specimen.extractedData as any)?.watermarks}
+              isLong
+            />
+          )}
+          {(specimen.extractedData as any)?.securityFeatures && (
+            <DetailRow
+              label="Security"
+              value={(specimen.extractedData as any)?.securityFeatures}
+              isLong
+            />
+          )}
+          {(specimen.notes || (specimen.extractedData as any)?.notes) && (
+            <DetailRow
+              label="Notes"
+              value={specimen.notes || (specimen.extractedData as any)?.notes}
+              isLong
+            />
+          )}
         </div>
 
         {/* Action Buttons */}
         <div className="space-y-2">
           <button
+            onClick={handleDelete}
+            className="w-full px-4 py-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-semibold rounded-lg border border-rose-200 dark:border-rose-900 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Delete Specimen</span>
+          </button>
+          <button
             onClick={onClose}
-            className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white font-semibold rounded-lg transition-colors"
+            className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white font-semibold rounded-lg transition-colors cursor-pointer"
           >
             Close
           </button>
         </div>
+
+        {/* Interactive Photo Adjuster Modal */}
+        <PhotoAdjusterModal
+          isOpen={adjustingSide !== null}
+          onClose={() => setAdjustingSide(null)}
+          imageBlob={adjustingSide === 'front' ? activeFrontBlob : activeBackBlob}
+          initialPreviewUrl={adjustingSide === 'front' ? frontUrl : backUrl}
+          sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
+          onApply={handleApplyAdjustment}
+        />
       </div>
     </div>
   );

@@ -38,8 +38,14 @@ export function useAIExtraction(): UseAIExtractionReturn {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to extract banknote details');
+          const errorData = await response.json().catch(() => ({}));
+          const errMsg = errorData.error || 'Failed to extract banknote details';
+          if (errMsg.includes('API key not configured')) {
+            console.warn('[Gemini Vision] AI extraction skipped: GOOGLE_GENERATIVE_AI_API_KEY is not configured in .env.local.');
+            setError('AI extraction skipped: API key not configured');
+            return null;
+          }
+          throw new Error(errMsg);
         }
 
         const result = await response.json();
@@ -53,7 +59,7 @@ export function useAIExtraction(): UseAIExtractionReturn {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Extraction failed';
         setError(errorMessage);
-        console.error('AI extraction error:', err);
+        console.warn('AI extraction:', errorMessage);
         return null;
       } finally {
         setIsExtracting(false);

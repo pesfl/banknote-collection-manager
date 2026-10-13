@@ -11,7 +11,12 @@ import {
   ShieldCheck, 
   Sparkles,
   Info,
-  Server
+  Server,
+  Cloud,
+  ExternalLink,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { AnimatedThemeToggler } from '@/registry/magicui/animated-theme-toggler';
 import { toast } from 'sonner';
@@ -19,10 +24,26 @@ import { toast } from 'sonner';
 export default function SettingsPage() {
   const [stats, setStats] = useState({ specimenCount: 0, syncQueueCount: 0, estimatedSize: '0 B' });
   const [isLoading, setIsLoading] = useState(true);
+  const [r2Status, setR2Status] = useState<any>(null);
+  const [isCheckingR2, setIsCheckingR2] = useState(false);
 
   useEffect(() => {
     loadStats();
+    checkR2();
   }, []);
+
+  const checkR2 = async () => {
+    setIsCheckingR2(true);
+    try {
+      const res = await fetch('/api/storage/status');
+      const data = await res.json();
+      setR2Status(data);
+    } catch (err) {
+      setR2Status({ configured: false, status: 'error', message: 'Failed to query R2 status' });
+    } finally {
+      setIsCheckingR2(false);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -70,6 +91,81 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Cloudflare R2 Media Storage Card */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-4 md:col-span-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400">
+                <Cloud className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Cloudflare R2 Media Storage
+                  </h3>
+                  {r2Status?.status === 'connected' ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <CheckCircle2 className="h-3 w-3" /> Connected
+                    </span>
+                  ) : r2Status?.configured ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                      <AlertTriangle className="h-3 w-3" /> Connection Issue
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      Pending API Keys
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  High-speed, zero-egress fee specimen media vault on Cloudflare.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={checkR2}
+                disabled={isCheckingR2}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isCheckingR2 ? 'animate-spin' : ''}`} />
+                <span>Test Connection</span>
+              </button>
+              <a
+                href="https://dash.cloudflare.com/e97df7bfb09acbf14f6a44b36cc979f7/r2/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold transition-colors shadow-2xs"
+              >
+                <span>Open Cloudflare R2</span>
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[10px] font-sans font-semibold text-slate-400 uppercase tracking-wider block">Account ID</span>
+              <span className="text-slate-900 dark:text-white font-bold truncate block">{r2Status?.accountId || 'e97df7bfb09acbf14f6a44b36cc979f7'}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[10px] font-sans font-semibold text-slate-400 uppercase tracking-wider block">Target Bucket</span>
+              <span className="text-slate-900 dark:text-white font-bold block">{r2Status?.bucket || 'banknotes-media'}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-[10px] font-sans font-semibold text-slate-400 uppercase tracking-wider block">Streaming Proxy</span>
+              <span className="text-slate-900 dark:text-white font-bold block">/api/media/[key]</span>
+            </div>
+          </div>
+
+          {r2Status?.hint && (
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-300">
+              {r2Status.hint}
+            </div>
+          )}
+        </div>
+
         {/* Appearance & Theming */}
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-4">
           <div className="flex items-center gap-2">

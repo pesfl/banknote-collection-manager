@@ -9,6 +9,7 @@ import { prisma } from './db/prisma';
  * Supports Google OAuth 2.0 and Credentials authentication
  */
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
   adapter: process.env.ENABLE_PRISMA_ADAPTER === 'true' && process.env.DATABASE_URL ? (PrismaAdapter(prisma) as any) : undefined,
   providers: [
     GoogleProvider({

@@ -43,16 +43,49 @@ export default function CameraInput({
     };
   }, [stream]);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    let file = event.target.files?.[0];
     if (!file) return;
-
-    // Create object URL for immediate high-performance preview
-    const preview = URL.createObjectURL(file);
-    onCapture(file, preview);
 
     // Reset input value so same file can be re-selected if retaken
     event.target.value = '';
+
+    // Convert iPhone/Mac HEIC or HEIF images to standard JPEG for browser rendering
+    const isHeic =
+      file.type.toLowerCase().includes('heic') ||
+      file.type.toLowerCase().includes('heif') ||
+      /\.hei[cf]$/i.test(file.name);
+
+    if (isHeic) {
+      try {
+        const heic2anyModule = await import('heic2any');
+        const heic2any = heic2anyModule.default || heic2anyModule;
+        const converted = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.9,
+        });
+        const jpegBlob = (Array.isArray(converted) ? converted[0] : converted) as Blob;
+        file = new File([jpegBlob], file.name.replace(/\.hei[cf]$/i, '.jpg'), {
+          type: 'image/jpeg',
+        });
+      } catch (convErr) {
+        console.warn('HEIC preview conversion notice:', convErr);
+      }
+    }
+
+    // Read as Data URL to guarantee rock-solid preview that never breaks
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = (e.target?.result as string) || '';
+      onCapture(file, dataUrl || URL.createObjectURL(file));
+    };
+    reader.onerror = () => {
+      // Fallback to object URL if FileReader fails
+      const preview = URL.createObjectURL(file);
+      onCapture(file, preview);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleTakePhotoClick = () => {
@@ -130,11 +163,11 @@ export default function CameraInput({
 
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       canvas.toBlob(
         blob => {
           if (blob) {
-            const preview = URL.createObjectURL(blob);
-            onCapture(blob, preview);
+            onCapture(blob, dataUrl);
             stopLiveCamera();
           }
         },

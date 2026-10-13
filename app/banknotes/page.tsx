@@ -172,33 +172,66 @@ function BanknotesInventoryContent() {
   const [sortBy, setSortBy] = useState<'recent' | 'country' | 'value'>('recent');
 
   useEffect(() => {
+    function getSafeBlobUrl(blob?: any): string | undefined {
+      if (!blob) return undefined;
+      try {
+        if (blob instanceof Blob || (typeof blob === 'object' && blob.size)) {
+          return URL.createObjectURL(blob);
+        }
+      } catch (e) {
+        console.warn('Could not create object URL for blob:', e);
+      }
+      return undefined;
+    }
+
     async function loadIndexedDb() {
       try {
         const local = await getAllSpecimens();
-        if (local.length > 0) {
-          const mappedLocal: Banknote[] = local.map((l) => ({
-            id: l.id,
-            userId: 'local',
-            isReplacementNote: false,
-            countryOfOrigin: l.extractedData?.country || 'Unknown',
-            denomination: l.extractedData?.denomination || 'Unknown',
-            currency: '',
-            pickNumber: l.extractedData?.pickNumber || 'P-Pending',
-            fullSerialNumber: 'Local IDB',
-            conditionGrade: 'UNC',
-            frontImageUrl: l.frontImageBlob ? URL.createObjectURL(l.frontImageBlob) : undefined,
-            backImageUrl: l.backImageBlob ? URL.createObjectURL(l.backImageBlob) : undefined,
-            notes: l.notes || 'Local capture pending AI extraction sync.',
-            createdAt: new Date(l.capturedAt),
-            updatedAt: new Date(l.capturedAt),
-          }));
+        if (local && local.length > 0) {
+          const mappedLocal: Banknote[] = local.map((l) => {
+            const ex = (l.extractedData || {}) as any;
+            return {
+              id: l.id,
+              userId: 'local',
+              isReplacementNote: Boolean(ex.isReplacementNote),
+              countryOfOrigin: ex.countryOfOrigin || ex.country || 'Unknown Country',
+              denomination: ex.denomination || 'Unknown',
+              currency: ex.currency || '',
+              pickNumber: ex.pickNumber || 'P-Pending',
+              issueYear: ex.issueYear || undefined,
+              seriesDate: ex.seriesDate || undefined,
+              fullSerialNumber: ex.fullSerialNumber || ex.serialNumeric || 'Local IDB',
+              serialPrefix: ex.serialPrefix || undefined,
+              serialNumeric: ex.serialNumeric || undefined,
+              serialSuffix: ex.serialSuffix || undefined,
+              conditionGrade: ex.conditionGrade || 'UNC',
+              machineEstimatedGrade: ex.machineEstimatedGrade || undefined,
+              fancySerialType: ex.fancySerialType || 'None',
+              signature1Name: ex.signature1Name || undefined,
+              signature1Title: ex.signature1Title || undefined,
+              signature2Name: ex.signature2Name || undefined,
+              signature2Title: ex.signature2Title || undefined,
+              watermarks: ex.watermarks || undefined,
+              securityFeatures: ex.securityFeatures || undefined,
+              frontImageUrl: getSafeBlobUrl(l.frontImageBlob),
+              backImageUrl: getSafeBlobUrl(l.backImageBlob),
+              displayImageUrl: getSafeBlobUrl(l.frontImageBlob),
+              notes: ex.notes || l.notes || 'Specimen captured locally.',
+              defectsAndAnomalies: ex.defectsAndAnomalies || undefined,
+              createdAt: new Date(l.capturedAt),
+              updatedAt: new Date(l.capturedAt),
+            };
+          });
           setBanknotes([...mappedLocal, ...MOCK_BANKNOTES]);
         }
       } catch (err) {
         console.error('Error querying local specimens:', err);
       }
     }
+
     loadIndexedDb();
+    const interval = setInterval(loadIndexedDb, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const sortedBanknotes = [...banknotes].sort((a, b) => {
@@ -218,6 +251,9 @@ function BanknotesInventoryContent() {
       banknotes={sortedBanknotes}
       isLoading={false}
       onSort={setSortBy}
+      onSpecimenUpdated={(updated) => {
+        setBanknotes(prev => prev.map(b => b.id === updated.id ? updated : b));
+      }}
     />
   );
 }

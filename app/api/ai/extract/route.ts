@@ -18,11 +18,17 @@ import { AIExtractionSchema } from '@/types';
 export async function POST(request: NextRequest) {
   try {
     // Check if API key is set
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    const apiKey =
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY;
+
+    if (!apiKey) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Google Generative AI API key not configured',
+          error:
+            'Google Generative AI API key not configured. Add GOOGLE_GENERATIVE_AI_API_KEY to .env.local to enable AI extraction.',
         },
         { status: 500 }
       );

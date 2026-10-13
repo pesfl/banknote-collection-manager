@@ -14,12 +14,16 @@ import {
 import type { Banknote } from '@/types';
 import BanknoteListItem from './BanknoteListItem';
 import { toast } from 'sonner';
+import PhotoAdjusterModal from '@/components/mobile/PhotoAdjusterModal';
+import { cleanBanknoteImage, ensureImageBlob } from '@/lib/media/banknote-cleaner';
+import { getSpecimen, updateSpecimen } from '@/lib/offline/idb';
 
 interface BanknoteListViewProps {
   banknotes?: Banknote[];
   isLoading?: boolean;
   onSort?: (sort: 'recent' | 'country' | 'value') => void;
   onFilter?: (filter: string) => void;
+  onSpecimenUpdated?: (updated: Banknote) => void;
 }
 
 export default function BanknoteListView({
@@ -27,6 +31,7 @@ export default function BanknoteListView({
   isLoading = false,
   onSort,
   onFilter,
+  onSpecimenUpdated,
 }: BanknoteListViewProps) {
   const [sortBy, setSortBy] = useState<'recent' | 'country' | 'value'>('recent');
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +40,11 @@ export default function BanknoteListView({
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [selectedGrade, setSelectedGrade] = useState<string>('ALL');
   const [activeSpecimen, setActiveSpecimen] = useState<Banknote | null>(null);
+
+  const [isFixing, setIsFixing] = useState(false);
+  const [adjustingSide, setAdjustingSide] = useState<'front' | 'back' | null>(null);
+  const [adjustingBlob, setAdjustingBlob] = useState<Blob | null>(null);
+  const [originalImages, setOriginalImages] = useState<{ [id: string]: { front?: string; back?: string } }>({});
 
   const handleSort = (sort: 'recent' | 'country' | 'value') => {
     setSortBy(sort);
@@ -50,6 +60,260 @@ export default function BanknoteListView({
     downloadAnchor.click();
     downloadAnchor.remove();
     toast.success('Collection exported as JSON');
+  };
+
+  const handleStartAdjust = async (side: 'front' | 'back') => {
+    if (!activeSpecimen) return;
+    const url = side === 'front' ? activeSpecimen.frontImageUrl : activeSpecimen.backImageUrl;
+    if (!url) {
+      toast.error(`No ${side} image available to adjust`);
+      return;
+    }
+    try {
+      toast.info(`Preparing ${side} image editor...`);
+      const blob = await ensureImageBlob(url);
+      setAdjustingBlob(blob);
+      setAdjustingSide(side);
+    } catch (err) {
+      console.error('Error loading image for adjuster:', err);
+      toast.error(`Could not load ${side} image for editing`);
+    }
+  };
+
+  const handleAutoFixSide = async (side: 'front' | 'back') => {
+    if (!activeSpecimen) return;
+    const url = side === 'front' ? activeSpecimen.frontImageUrl : activeSpecimen.backImageUrl;
+    if (!url) {
+      toast.error(`No ${side} image available`);
+      return;
+    }
+    setIsFixing(true);
+    try {
+      toast.info(`Straightening and cropping ${side} photo...`);
+      const blob = await ensureImageBlob(url);
+      const cleanRes = await cleanBanknoteImage(blob, {
+        autoStraighten: true,
+        autoCropEdges: true,
+        autoRotateLandscape: false,
+        cropMarginPercent: 0,
+        enhanceClarity: false,
+      });
+
+      if (cleanRes && cleanRes.cleanedBlob) {
+        const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
+        if (!originalImages[specKey]) {
+          setOriginalImages(prev => ({
+            ...prev,
+            [specKey]: {
+              front: activeSpecimen.frontImageUrl,
+              back: activeSpecimen.backImageUrl,
+            }
+          }));
+        }
+
+        const updated: Banknote = {
+          ...activeSpecimen,
+          [side === 'front' ? 'frontImageUrl' : 'backImageUrl']: cleanRes.dataUrl,
+          ...(side === 'front' ? { displayImageUrl: cleanRes.dataUrl } : {}),
+        };
+        setActiveSpecimen(updated);
+        onSpecimenUpdated?.(updated);
+
+        if (activeSpecimen.id) {
+          try {
+            const local = await getSpecimen(activeSpecimen.id);
+            if (local) {
+              await updateSpecimen({
+                ...local,
+                [side === 'front' ? 'frontImageBlob' : 'backImageBlob']: cleanRes.cleanedBlob,
+              });
+            }
+          } catch (e) {
+            console.warn('IDB update skipped:', e);
+          }
+        }
+
+        toast.success(`✨ ${side === 'front' ? 'Front' : 'Back'} image straightened & cropped!`);
+      }
+    } catch (err) {
+      console.error('Auto fix error:', err);
+      toast.error(`Could not fix ${side} image`);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  const handleAutoFixBoth = async () => {
+    if (!activeSpecimen) return;
+    const frontUrl = activeSpecimen.frontImageUrl;
+    const backUrl = activeSpecimen.backImageUrl;
+    if (!frontUrl && !backUrl) {
+      toast.error('No images available to fix');
+      return;
+    }
+
+    setIsFixing(true);
+    try {
+      toast.info('Straightening and cropping both note images...');
+      const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
+      if (!originalImages[specKey]) {
+        setOriginalImages(prev => ({
+          ...prev,
+          [specKey]: {
+            front: activeSpecimen.frontImageUrl,
+            back: activeSpecimen.backImageUrl,
+          }
+        }));
+      }
+
+      const fixes: Promise<any>[] = [];
+      if (frontUrl) {
+        fixes.push(
+          ensureImageBlob(frontUrl).then(b =>
+            cleanBanknoteImage(b, {
+              autoStraighten: true,
+              autoCropEdges: true,
+              autoRotateLandscape: false,
+              cropMarginPercent: 0,
+              enhanceClarity: false,
+            })
+          )
+        );
+      } else {
+        fixes.push(Promise.resolve(null));
+      }
+
+      if (backUrl) {
+        fixes.push(
+          ensureImageBlob(backUrl).then(b =>
+            cleanBanknoteImage(b, {
+              autoStraighten: true,
+              autoCropEdges: true,
+              autoRotateLandscape: false,
+              cropMarginPercent: 0,
+              enhanceClarity: false,
+            })
+          )
+        );
+      } else {
+        fixes.push(Promise.resolve(null));
+      }
+
+      const [cleanFront, cleanBack] = await Promise.all(fixes);
+
+      const updated: Banknote = {
+        ...activeSpecimen,
+        frontImageUrl: cleanFront?.dataUrl || activeSpecimen.frontImageUrl,
+        backImageUrl: cleanBack?.dataUrl || activeSpecimen.backImageUrl,
+        displayImageUrl: cleanFront?.dataUrl || activeSpecimen.displayImageUrl,
+      };
+      setActiveSpecimen(updated);
+      onSpecimenUpdated?.(updated);
+
+      if (activeSpecimen.id) {
+        try {
+          const local = await getSpecimen(activeSpecimen.id);
+          if (local) {
+            await updateSpecimen({
+              ...local,
+              ...(cleanFront?.cleanedBlob ? { frontImageBlob: cleanFront.cleanedBlob } : {}),
+              ...(cleanBack?.cleanedBlob ? { backImageBlob: cleanBack.cleanedBlob } : {}),
+            });
+          }
+        } catch (e) {
+          console.warn('IDB update skipped:', e);
+        }
+      }
+
+      toast.success('✨ Both specimen images straightened and cropped!');
+    } catch (err) {
+      console.error('Auto fix both error:', err);
+      toast.error('Could not fix specimen images');
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  const handleResetOriginal = async (side: 'front' | 'back') => {
+    if (!activeSpecimen) return;
+    const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
+    const orig = originalImages[specKey];
+    const origUrl = side === 'front' ? orig?.front : orig?.back;
+    if (!origUrl) {
+      toast.info(`${side === 'front' ? 'Front' : 'Back'} image is already at original state`);
+      return;
+    }
+
+    try {
+      const updated: Banknote = {
+        ...activeSpecimen,
+        [side === 'front' ? 'frontImageUrl' : 'backImageUrl']: origUrl,
+        ...(side === 'front' ? { displayImageUrl: origUrl } : {}),
+      };
+      setActiveSpecimen(updated);
+      onSpecimenUpdated?.(updated);
+
+      if (activeSpecimen.id) {
+        try {
+          const local = await getSpecimen(activeSpecimen.id);
+          if (local) {
+            const origBlob = await ensureImageBlob(origUrl);
+            await updateSpecimen({
+              ...local,
+              [side === 'front' ? 'frontImageBlob' : 'backImageBlob']: origBlob,
+            });
+          }
+        } catch (e) {
+          console.warn('IDB revert skipped:', e);
+        }
+      }
+
+      toast.success(`Reset ${side} photo to original`);
+    } catch {
+      toast.error(`Could not reset ${side} photo`);
+    }
+  };
+
+  const handleApplyAdjustment = async (cleanedBlob: Blob, cleanedPreview: string) => {
+    if (!activeSpecimen || !adjustingSide) return;
+    try {
+      const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
+      if (!originalImages[specKey]) {
+        setOriginalImages(prev => ({
+          ...prev,
+          [specKey]: {
+            front: activeSpecimen.frontImageUrl,
+            back: activeSpecimen.backImageUrl,
+          }
+        }));
+      }
+
+      const updated: Banknote = {
+        ...activeSpecimen,
+        [adjustingSide === 'front' ? 'frontImageUrl' : 'backImageUrl']: cleanedPreview,
+        ...(adjustingSide === 'front' ? { displayImageUrl: cleanedPreview } : {}),
+      };
+      setActiveSpecimen(updated);
+      onSpecimenUpdated?.(updated);
+
+      if (activeSpecimen.id) {
+        try {
+          const local = await getSpecimen(activeSpecimen.id);
+          if (local) {
+            await updateSpecimen({
+              ...local,
+              [adjustingSide === 'front' ? 'frontImageBlob' : 'backImageBlob']: cleanedBlob,
+            });
+          }
+        } catch (e) {
+          console.warn('IDB update skipped:', e);
+        }
+      }
+
+      toast.success(`✨ ${adjustingSide === 'front' ? 'Front' : 'Back'} photo updated and saved!`);
+    } catch {
+      toast.error('Failed to save adjusted photo');
+    }
   };
 
   const filteredBanknotes = banknotes.filter(b => {
@@ -261,26 +525,91 @@ export default function BanknoteListView({
               </button>
             </div>
 
+            {/* Quick Auto-Fix Both Button */}
+            <button
+              type="button"
+              onClick={handleAutoFixBoth}
+              disabled={isFixing}
+              className="w-full py-2.5 px-4 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+            >
+              <span className={isFixing ? 'animate-spin' : ''}>🪄</span>
+              <span>{isFixing ? 'Auto-Fixing Images...' : 'Auto-Fix Both Images (Crop & Straighten)'}</span>
+            </button>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="rounded-xl overflow-hidden border-2 border-[#00c2cb] bg-slate-100 dark:bg-slate-900">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                  Front Specimen Scan
-                </span>
+                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Front Specimen Scan
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleResetOriginal('front')}
+                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                      title="Restore original unedited photo"
+                    >
+                      <span>↺ Reset</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAutoFixSide('front')}
+                      disabled={isFixing}
+                      className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>🪄 Fix Image</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartAdjust('front')}
+                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>✂️ Adjust</span>
+                    </button>
+                  </div>
+                </div>
                 <img
                   src={activeSpecimen.frontImageUrl || 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=800&auto=format&fit=crop&q=80'}
                   alt="Front Scan"
-                  className="w-full h-48 object-cover"
+                  className="w-full h-56 object-contain bg-slate-950/60 p-2"
                 />
               </div>
 
               <div className="rounded-xl overflow-hidden border-2 border-[#00c2cb] bg-slate-100 dark:bg-slate-900">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                  Back Specimen Scan
-                </span>
+                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Back Specimen Scan
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleResetOriginal('back')}
+                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                      title="Restore original unedited photo"
+                    >
+                      <span>↺ Reset</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAutoFixSide('back')}
+                      disabled={isFixing}
+                      className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>🪄 Fix Image</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartAdjust('back')}
+                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>✂️ Adjust</span>
+                    </button>
+                  </div>
+                </div>
                 <img
                   src={activeSpecimen.backImageUrl || 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=800&auto=format&fit=crop&q=80'}
                   alt="Back Scan"
-                  className="w-full h-48 object-cover"
+                  className="w-full h-56 object-contain bg-slate-950/60 p-2"
                 />
               </div>
             </div>
@@ -292,6 +621,19 @@ export default function BanknoteListView({
               </p>
             </div>
           </div>
+
+          {/* Interactive Photo Deskew & Edge Trimming Modal */}
+          <PhotoAdjusterModal
+            isOpen={adjustingSide !== null}
+            onClose={() => {
+              setAdjustingSide(null);
+              setAdjustingBlob(null);
+            }}
+            imageBlob={adjustingBlob}
+            initialPreviewUrl={adjustingSide === 'front' ? activeSpecimen.frontImageUrl || null : activeSpecimen.backImageUrl || null}
+            sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
+            onApply={handleApplyAdjustment}
+          />
         </div>
       )}
     </div>

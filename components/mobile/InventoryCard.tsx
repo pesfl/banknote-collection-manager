@@ -13,8 +13,10 @@ export default function InventoryCard({ specimen, onClick }: InventoryCardProps)
     ? URL.createObjectURL(specimen.frontImageBlob)
     : null;
 
-  const country = specimen.extractedData?.country || 'Unknown';
-  const denomination = specimen.extractedData?.denomination || '—';
+  const ex = (specimen.extractedData || {}) as any;
+  const country = ex.countryOfOrigin || ex.country || 'Unknown';
+  const denomination = ex.denomination && ex.denomination !== 'Unknown' ? ex.denomination : '—';
+  const serialOrYear = ex.fullSerialNumber || ex.issueYear || '';
   const capturedDate = new Date(specimen.capturedAt);
   const timeAgo = getTimeAgo(capturedDate);
 
@@ -30,7 +32,6 @@ export default function InventoryCard({ specimen, onClick }: InventoryCardProps)
             src={thumbnailUrl}
             alt={`${country} ${denomination}`}
             className="w-full h-full object-cover"
-            onLoad={() => URL.revokeObjectURL(thumbnailUrl)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -46,9 +47,16 @@ export default function InventoryCard({ specimen, onClick }: InventoryCardProps)
           <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
             {country}
           </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {denomination}
-          </p>
+          <div className="flex items-center justify-between gap-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {denomination}
+            </p>
+            {serialOrYear && (
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 truncate max-w-[90px]">
+                {serialOrYear}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Date & Sync Status */}
