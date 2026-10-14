@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useBanknoteCapture } from '@/hooks/useBanknoteCapture';
-import { useAIExtraction } from '@/hooks/useAIExtraction';
 import ImagePreview from './ImagePreview';
 import CameraInput from './CameraInput';
 import NotesInput from './NotesInput';
-import ExtractionResults from './ExtractionResults';
 import PhotoAdjusterModal from './PhotoAdjusterModal';
 import { toast } from 'sonner';
 import { getSpecimen, updateSpecimen } from '@/lib/offline/idb';
 import { cleanBanknoteImage } from '@/lib/media/banknote-cleaner';
+import { enqueueSpecimenForExtraction } from '@/lib/ai/background-queue';
+import { Sparkles, Check, ArrowRight, Camera, Repeat, Layers, Clock } from 'lucide-react';
 
-type CaptureStep = 'front' | 'back' | 'review' | 'extracting' | 'complete';
+type CaptureStep = 'front' | 'back' | 'review' | 'complete';
 
 interface CaptureFlowProps {
   onComplete?: (specimenId: string) => void;
@@ -31,9 +32,12 @@ export default function CaptureFlow({ onComplete }: CaptureFlowProps) {
   const [rawBackPreview, setRawBackPreview] = useState<string | null>(null);
   const [adjustingSide, setAdjustingSide] = useState<'front' | 'back' | null>(null);
 
+  // Continuous capture mode: automatically cycle to next note without waiting for AI
+  const [continuousMode, setContinuousMode] = useState(true);
+  const [capturedCount, setCapturedCount] = useState(0);
+  const [lastCapturedId, setLastCapturedId] = useState<string | null>(null);
+
   const { isCapturing, error, saveCapture } = useBanknoteCapture();
-  const { isExtracting, extractionData, error: extractionError, extractBanknote } =
-    useAIExtraction();
 
   const [isCleaning, setIsCleaning] = useState(false);
 
@@ -177,85 +181,41 @@ export default function CaptureFlow({ onComplete }: CaptureFlowProps) {
     setStep('back');
   };
 
-  const handleSave = async () => {
+  const handleSave = async (forceContinuous?: boolean) => {
     if (!frontImage || !backImage) {
       toast.error('Both front and back images are required');
       return;
     }
 
+    const shouldContinuous = forceContinuous !== undefined ? forceContinuous : continuousMode;
+
     try {
-      // Save specimen locally and push to Cloudflare R2
+      // Save specimen locally in IndexedDB and push to Cloudflare R2
       const specimenId = await saveCapture(frontImage, backImage, notes || undefined);
 
-      toast.success('Specimen saved and uploaded to storage!');
+      // Immediately queue for background AI identification without blocking the UI
+      enqueueSpecimenForExtraction(specimenId);
 
-      // Run AI extraction if available
-      setStep('extracting');
-      try {
-        const extraction = await extractBanknote(frontImage, backImage);
-        if (extraction) {
-          toast.success('AI banknote identification completed!');
-          try {
-            const existing = await getSpecimen(specimenId);
-            if (existing) {
-              await updateSpecimen({
-                ...existing,
-                extractedData: {
-                  ...extraction,
-                  country: extraction.countryOfOrigin || existing.extractedData?.country,
-                  countryOfOrigin: extraction.countryOfOrigin,
-                  denomination: extraction.denomination,
-                  pickNumber: extraction.pickNumber || undefined,
-                  fullSerialNumber: extraction.fullSerialNumber || undefined,
-                  issueYear: extraction.issueYear || undefined,
-                  seriesDate: extraction.seriesDate || undefined,
-                  conditionGrade: extraction.conditionGrade || undefined,
-                  machineEstimatedGrade: extraction.machineEstimatedGrade || undefined,
-                  currency: extraction.currency || undefined,
-                  fancySerialType: extraction.fancySerialType || undefined,
-                  isReplacementNote: extraction.isReplacementNote,
-                  signature1Name: extraction.signature1Name || undefined,
-                  signature1Title: extraction.signature1Title || undefined,
-                  signature2Name: extraction.signature2Name || undefined,
-                  signature2Title: extraction.signature2Title || undefined,
-                  watermarks: extraction.watermarks || undefined,
-                  securityFeatures: extraction.securityFeatures || undefined,
-                  notes: extraction.notes || undefined,
-                  defectsAndAnomalies: extraction.defectsAndAnomalies || undefined,
-                },
-              });
-
-              // If serverId is present, also update database record
-              if (existing.serverId) {
-                await fetch(`/api/banknotes/${existing.serverId}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(extraction),
-                }).catch(() => {});
-              }
-            }
-          } catch (idbUpdateErr) {
-            console.warn('Could not update specimen with AI extraction in IDB:', idbUpdateErr);
-          }
-        }
-      } catch (aiErr) {
-        console.warn('AI extraction skipped:', aiErr);
-      }
-
-      // Show completion
-      setStep('complete');
+      setLastCapturedId(specimenId);
+      setCapturedCount((prev) => prev + 1);
       onComplete?.(specimenId);
 
-      // Only auto-reset if no AI extraction results are being displayed to the user
-      if (!extractionData) {
-        setTimeout(() => {
-          setFrontImage(null);
-          setBackImage(null);
-          setFrontPreview(null);
-          setBackPreview(null);
-          setNotes('');
-          setStep('front');
-        }, 3000);
+      if (shouldContinuous) {
+        toast.success('📸 Specimen saved! AI running in background. Ready for next note.');
+        // Instant reset back to Front camera for uninterrupted continuous scanning!
+        setRawFrontImage(null);
+        setRawFrontPreview(null);
+        setRawBackImage(null);
+        setRawBackPreview(null);
+        setFrontImage(null);
+        setFrontPreview(null);
+        setBackImage(null);
+        setBackPreview(null);
+        setNotes('');
+        setStep('front');
+      } else {
+        toast.success('📸 Specimen saved! AI identification running in background.');
+        setStep('complete');
       }
     } catch (err: any) {
       console.error('Save failed:', err);
@@ -266,21 +226,54 @@ export default function CaptureFlow({ onComplete }: CaptureFlowProps) {
   return (
     <div className="w-full max-w-md mx-auto px-4">
       {/* Header */}
-      <div className="pt-4 pb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {step === 'front' && 'Capture Front'}
-          {step === 'back' && 'Capture Back'}
-          {step === 'review' && 'Review'}
-          {step === 'extracting' && '🤖 Analyzing...'}
-          {step === 'complete' && '✓ Saved!'}
-        </h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          {step === 'front' && 'Take a clear photo of the front of the banknote'}
-          {step === 'back' && 'Take a clear photo of the back of the banknote'}
-          {step === 'review' && 'Review your photos before saving'}
-          {step === 'extracting' && 'AI is identifying your banknote...'}
-          {step === 'complete' && 'Your specimen has been saved locally'}
-        </p>
+      <div className="pt-4 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+              {step === 'front' && 'Capture Front'}
+              {step === 'back' && 'Capture Back'}
+              {step === 'review' && 'Review Specimen'}
+              {step === 'complete' && '✓ Specimen Queued'}
+            </h1>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+              {step === 'front' && 'Snap the front side of your banknote'}
+              {step === 'back' && 'Snap the back side of your banknote'}
+              {step === 'review' && 'Inspect images and save to collection'}
+              {step === 'complete' && 'Saved! AI is extracting details in the background'}
+            </p>
+          </div>
+
+          {/* Continuous Capture Mode Pill */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !continuousMode;
+              setContinuousMode(next);
+              toast.info(next ? 'Continuous mode ON: fast capture without waiting for AI' : 'Continuous mode OFF');
+            }}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+              continuousMode
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700 shadow-2xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
+            }`}
+            title="Continuous Mode automatically resets to Front photo after saving so you can capture dozens of notes in a row without waiting for AI"
+          >
+            <span className={`w-2 h-2 rounded-full ${continuousMode ? 'bg-blue-500 animate-pulse' : 'bg-slate-400'}`} />
+            <span>Continuous: {continuousMode ? 'ON' : 'OFF'}</span>
+          </button>
+        </div>
+
+        {capturedCount > 0 && (
+          <div className="mt-2.5 flex items-center justify-between px-3 py-1.5 bg-blue-50/70 dark:bg-blue-950/30 rounded-xl border border-blue-200/60 dark:border-blue-900/40 text-xs">
+            <span className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+              <span>{capturedCount} note{capturedCount > 1 ? 's' : ''} captured this session</span>
+            </span>
+            <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+              Background AI Active
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Error Display */}
@@ -440,47 +433,38 @@ export default function CaptureFlow({ onComplete }: CaptureFlowProps) {
           <NotesInput value={notes} onChange={setNotes} />
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-2.5 pt-3">
             <button
               onClick={handleRetakeFront}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="flex-1 px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-colors cursor-pointer"
             >
               Retake Front
             </button>
             <button
               onClick={handleRetakeBack}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="flex-1 px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-colors cursor-pointer"
             >
               Retake Back
             </button>
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={isCapturing}
-            className="w-full px-4 py-3 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors"
-          >
-            {isCapturing ? 'Saving...' : 'Save Specimen'}
-          </button>
-        </div>
-      )}
+          <div className="space-y-2 pt-2">
+            <button
+              onClick={() => handleSave(true)}
+              disabled={isCapturing}
+              className="w-full py-3.5 px-4 text-sm font-bold text-white bg-linear-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Camera className="w-4 h-4" />
+              <span>{isCapturing ? 'Saving...' : 'Save & Capture Next (Continuous)'}</span>
+            </button>
 
-      {/* Extracting Step */}
-      {step === 'extracting' && (
-        <div className="text-center py-8 space-y-4">
-          <div className="flex justify-center">
-            <div className="animate-spin text-4xl">🤖</div>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 dark:text-white mb-2">
-              Analyzing with AI...
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Extracting banknote details (country, denomination, serial, condition, etc.)
-            </p>
-          </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
-            <div className="bg-blue-600 h-full w-2/3 animate-pulse"></div>
+            <button
+              onClick={() => handleSave(false)}
+              disabled={isCapturing}
+              className="w-full py-2.5 px-4 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+            >
+              Save & Finish
+            </button>
           </div>
         </div>
       )}
@@ -488,45 +472,32 @@ export default function CaptureFlow({ onComplete }: CaptureFlowProps) {
       {/* Complete Step */}
       {step === 'complete' && (
         <div className="space-y-4 pb-4">
-          <div className="text-center py-4">
-            <div className="text-5xl mb-2">✓</div>
-            <p className="font-semibold text-gray-900 dark:text-white">Saved!</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Saved to local storage. Will sync when you're online.
-            </p>
+          <div className="text-center py-6 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-3">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 text-2xl shadow-sm">
+              ✓
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Banknote Specimen Saved!
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
+                Your specimen is safely stored. AI identification is running in the background.
+              </p>
+            </div>
+
+            <div className="p-3 bg-blue-50/80 dark:bg-blue-950/40 rounded-xl border border-blue-200/80 dark:border-blue-900/50 text-left text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
+                <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                <span>Background Extraction Active</span>
+              </div>
+              <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                You can freely navigate away. A Magic UI animated notification will appear in the top-right corner when AI details are extracted.
+              </p>
+            </div>
           </div>
 
-          {/* Show Extraction Results if Available */}
-          {extractionData && (
-            <div>
-              <ExtractionResults
-                data={extractionData}
-                onClose={() => {
-                  setFrontImage(null);
-                  setBackImage(null);
-                  setFrontPreview(null);
-                  setBackPreview(null);
-                  setNotes('');
-                  setStep('front');
-                }}
-              />
-            </div>
-          )}
-
-          {/* Extraction Error */}
-          {extractionError && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                ⚠️ AI identification skipped: {extractionError}
-              </p>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                Your specimen is still saved. You can identify it manually later.
-              </p>
-            </div>
-          )}
-
-          {/* Capture Another Button */}
-          {!extractionData && !extractionError && (
+          {/* Action Buttons */}
+          <div className="space-y-2">
             <button
               onClick={() => {
                 setFrontImage(null);
@@ -536,11 +507,27 @@ export default function CaptureFlow({ onComplete }: CaptureFlowProps) {
                 setNotes('');
                 setStep('front');
               }}
-              className="w-full px-4 py-3 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              className="w-full py-3.5 px-4 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
             >
-              Capture Another
+              <Camera className="w-4 h-4" />
+              <span>Capture Another Banknote</span>
             </button>
-          )}
+
+            <div className="flex gap-2">
+              <Link
+                href="/banknotes"
+                className="flex-1 py-2.5 px-3 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Go to Banknotes
+              </Link>
+              <Link
+                href="/inventory"
+                className="flex-1 py-2.5 px-3 text-xs font-semibold text-center text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Go to Inventory
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 

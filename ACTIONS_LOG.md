@@ -89,3 +89,49 @@
 - 2026-10-14: Added photo edit UI & adjuster modal to /banknotes
 - 2026-10-14: Added photo edit UI & adjuster modal to dashboard
 - 2026-10-14: Connected live IndexedDB image persistence to all UI
+- 2026-10-14: Decoupled capture from AI extraction
+- 2026-10-14: Added continuous capture mode
+- 2026-10-14: Built background AI extraction queue
+- 2026-10-14: Created Magic UI animated alert list
+- 2026-10-14: Made worker persistent across pages
+- 2026-10-14: Added reactive IDB update listeners
+- 2026-10-14: Added manual 4-corner setter to modal
+- 2026-10-14: Added draggable corner pins to modal
+- 2026-10-14: Built precision zoom magnifying loupe
+- 2026-10-14: Built homography perspective warper
+- 2026-10-14: Added 4-corner note straightening
+- 2026-10-14: Fixed corner drag premature close
+- 2026-10-14: Added window pointer drag listeners
+- 2026-10-14: Isolated adjuster modal event bubbling
+- 2026-10-14: Removed dummy $150 fallback price
+- 2026-10-14: Created multi-source valuation engine
+- 2026-10-14: Added PMG World Paper Money anchor
+- 2026-10-14: Added Numista community value curve
+- 2026-10-14: Added eBay last sold price generator
+- 2026-10-14: Added live eBay sold listings URL
+- 2026-10-14: Added condition grade valuation curve
+- 2026-10-14: Added star & fancy serial multipliers
+- 2026-10-14: Built valuation API endpoint route
+- 2026-10-14: Linked valuation to background queue
+- 2026-10-14: Added valuation matrix to dashboard
+- 2026-10-14: Added valuation matrix to banknotes
+- 2026-10-14: Added valuation card to inventory
+- 2026-10-14: Added live valuation refresh buttons
+- 2026-10-14: Added Numista v2 Free Plan API support
+- 2026-10-14: Added Client ID header to Numista API
+- 2026-10-14: Fixed valuation response unwrapping bug
+- 2026-10-15: Sanitized eBay search query parameters
+- 2026-10-15: Added eBay minimum marketplace price floor
+- 2026-10-15: Built real eBay OAuth2 live client
+- 2026-10-15: Stopped fabricating assumed eBay prices
+- 2026-10-15: Added auto-fill for missing valuations
+- 2026-10-15: Restricted revaluation to manual refresh only
+- 2026-10-15: Fixed stuck pending valuation in background worker
+- 2026-10-15: Resolved sample banknote BN-IN-005 catalog values
+- 2026-10-15: Added fallback valuation for notes missing AI fields
+- 2026-10-15: Mapped local valuations to banknotes inventory page
+- 2026-10-15: Connected background worker to server valuation API
+- 2026-10-15: Added live sync for activeSpecimen in BanknoteListView
+- 2026-10-15: Fixed worker interval lockup on client Fast Refresh
+- 2026-10-15: Consolidated redundant dashboard capture action buttons into single Add Note button
+- 2026-10-15: Upgraded Numista API integration from obsolete 404 /v2 endpoints to official /v3/types and /v3/types/{id}/issues/{id}/prices

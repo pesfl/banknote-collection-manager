@@ -149,9 +149,28 @@ export const LocalSpecimenSchema = z.object({
   serverId: z.string().optional(),
   lastSyncAttempt: z.date().optional(),
   syncRetryCount: z.number().default(0),
+  extractionStatus: z.enum(['idle', 'pending', 'extracting', 'completed', 'failed']).optional(),
+  extractionError: z.string().optional(),
 });
 
 export type LocalSpecimen = z.infer<typeof LocalSpecimenSchema>;
+
+export interface ExtractionNotification {
+  id: string;
+  specimenId: string;
+  country: string;
+  countryFlag: string;
+  denomination: string;
+  pickNumber?: string;
+  serialNumber?: string;
+  conditionGrade?: string;
+  issueYear?: string;
+  valuation?: string;
+  thumbnailUrl?: string;
+  status: 'completed' | 'failed';
+  message: string;
+  timestamp: Date;
+}
 
 // ============================================================================
 // SYNC TYPES
@@ -237,6 +256,7 @@ export const AIExtractionSchema = z.object({
   errorType: z.string().nullish(),
   defectsAndAnomalies: z.string().nullish(),
   notes: z.string().nullish(),
+  valuation: z.lazy(() => BanknoteValuationSchema).optional(),
 });
 
 export type AIExtraction = z.infer<typeof AIExtractionSchema>;
@@ -244,6 +264,22 @@ export type AIExtraction = z.infer<typeof AIExtractionSchema>;
 // ============================================================================
 // VALUATION TYPES
 // ============================================================================
+
+export const BanknoteValuationSchema = z.object({
+  pmgValue: z.string().optional(),
+  numistaValue: z.string().optional(),
+  ebayLastSold: z.string().optional(),
+  ebaySoldDate: z.string().optional(),
+  ebaySoldUrl: z.string().optional(),
+  collectorMarketValue: z.string(),
+  faceValue: z.string().optional(),
+  valuationConfidence: z.enum(['low', 'medium', 'high', 'exceptional']).default('medium'),
+  valuationSources: z.array(z.string()).default([]),
+  lastValuationDate: z.string().optional(),
+  valuationNotes: z.string().optional(),
+});
+
+export type BanknoteValuation = z.infer<typeof BanknoteValuationSchema>;
 
 export const ValuationSourceEnum = z.enum([
   'PMG_PRICE_GUIDE',

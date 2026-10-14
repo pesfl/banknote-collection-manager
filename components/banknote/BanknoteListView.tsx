@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Building2, 
@@ -9,7 +9,10 @@ import {
   Filter, 
   Download, 
   Layers,
-  X
+  X,
+  TrendingUp,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import type { Banknote } from '@/types';
 import BanknoteListItem from './BanknoteListItem';
@@ -45,6 +48,80 @@ export default function BanknoteListView({
   const [adjustingSide, setAdjustingSide] = useState<'front' | 'back' | null>(null);
   const [adjustingBlob, setAdjustingBlob] = useState<Blob | null>(null);
   const [originalImages, setOriginalImages] = useState<{ [id: string]: { front?: string; back?: string } }>({});
+  const [isRefreshingValuation, setIsRefreshingValuation] = useState(false);
+
+  // Synchronize activeSpecimen when parent banknotes collection updates
+  useEffect(() => {
+    if (!activeSpecimen) return;
+    const current = banknotes.find((b) => b.id === activeSpecimen.id);
+    if (current) {
+      const curColVal = current.collectorMarketValue;
+      const actColVal = activeSpecimen.collectorMarketValue;
+      const curNumVal = (current as any).numistaValue;
+      const actNumVal = (activeSpecimen as any).numistaValue;
+      if (curColVal !== actColVal || curNumVal !== actNumVal) {
+        setActiveSpecimen(current);
+      }
+    }
+  }, [banknotes, activeSpecimen]);
+
+  const handleRefreshValuation = async () => {
+    if (!activeSpecimen) return;
+    setIsRefreshingValuation(true);
+    try {
+      const res = await fetch(`/api/valuation/${activeSpecimen.id || 'temp'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          countryOfOrigin: activeSpecimen.countryOfOrigin,
+          denomination: activeSpecimen.denomination,
+          issueYear: activeSpecimen.issueYear,
+          conditionGrade: activeSpecimen.conditionGrade,
+          serialNumeric: activeSpecimen.serialNumeric || activeSpecimen.fullSerialNumber,
+          isReplacementNote: activeSpecimen.isReplacementNote,
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const valData = json?.data || json;
+        const updated: Banknote = {
+          ...activeSpecimen,
+          collectorMarketValue: valData.collectorMarketValue || activeSpecimen.collectorMarketValue,
+          numistaPmgValue: valData.numistaValue || activeSpecimen.numistaPmgValue,
+          pmgValue: valData.pmgValue,
+          numistaValue: valData.numistaValue,
+          ebayLastSold: valData.ebayLastSold,
+          ebaySoldUrl: valData.ebaySoldUrl,
+        } as any;
+        setActiveSpecimen(updated);
+        onSpecimenUpdated?.(updated);
+
+        if (activeSpecimen.id) {
+          const local = await getSpecimen(activeSpecimen.id);
+          if (local) {
+            await updateSpecimen({
+              ...local,
+              extractedData: {
+                ...(local.extractedData || {}),
+                valuation: valData,
+                collectorMarketValue: valData.collectorMarketValue,
+                pmgValue: valData.pmgValue,
+                numistaValue: valData.numistaValue,
+                ebayLastSold: valData.ebayLastSold,
+              }
+            });
+          }
+        }
+        toast.success(`Valuation updated: ${valData.collectorMarketValue}`);
+      } else {
+        toast.error('Could not refresh valuation');
+      }
+    } catch {
+      toast.error('Failed to contact valuation service');
+    } finally {
+      setIsRefreshingValuation(false);
+    }
+  };
 
   const handleSort = (sort: 'recent' | 'country' | 'value') => {
     setSortBy(sort);
@@ -614,6 +691,108 @@ export default function BanknoteListView({
               </div>
             </div>
 
+            {/* Multi-Source Valuation Matrix */}
+            <div className="p-3.5 rounded-2xl bg-linear-to-br from-slate-900 to-[#0e172e] border border-emerald-500/30 text-white shadow-lg space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold tracking-tight text-white flex items-center gap-1.5">
+                      Multi-Source Valuation Matrix
+                      <span className="text-[10px] font-medium px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Live Consensus
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-slate-400">Harmonized from PMG World Paper Money, Numista, & completed eBay sales</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefreshValuation}
+                  disabled={isRefreshingValuation}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-800/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="Re-query valuation engine with current condition and serial features"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isRefreshingValuation ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingValuation ? 'Updating...' : 'Refresh Live'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {/* 1. PMG Catalog */}
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                    <span>🏛️ PMG Catalog</span>
+                  </div>
+                  <div className="text-sm font-bold font-mono text-slate-200">
+                    {(activeSpecimen as any).pmgValue || (activeSpecimen.numistaPmgValue?.split('/')?.[0]?.trim()) || '—'}
+                  </div>
+                  <div className="text-[9px] text-slate-400 mt-0.5">Catalog Anchor</div>
+                </div>
+
+                {/* 2. Numista Value */}
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                    <span>🪙 Numista</span>
+                  </div>
+                  <div className="text-sm font-bold font-mono text-cyan-300">
+                    {(activeSpecimen as any).numistaValue || (activeSpecimen.numistaPmgValue?.split('/')?.[1]?.trim()) || '—'}
+                  </div>
+                  <div className="text-[9px] text-slate-400 mt-0.5">Community Curve</div>
+                </div>
+
+                {/* 3. eBay Last Sold */}
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                    <span>🛒 eBay Last Sold</span>
+                    {(activeSpecimen as any).ebaySoldUrl && (
+                      <a
+                        href={(activeSpecimen as any).ebaySoldUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-400 hover:text-blue-300 transition-colors"
+                        title="View completed sold listings on eBay"
+                      >
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                  </div>
+                  <div className="text-sm font-bold font-mono text-amber-300">
+                    {(activeSpecimen as any).ebayLastSold ? (
+                      (activeSpecimen as any).ebayLastSold
+                    ) : (activeSpecimen as any).ebaySoldUrl ? (
+                      <a
+                        href={(activeSpecimen as any).ebaySoldUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 font-sans flex items-center gap-1 underline"
+                      >
+                        <span>Check Sold ↗</span>
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                  <div className="text-[9px] text-slate-400 mt-0.5">
+                    {(activeSpecimen as any).ebayLastSold ? 'Verified Sale' : 'Live Marketplace Search'}
+                  </div>
+                </div>
+
+                {/* 4. Collector Market Value */}
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-colors">
+                  <div className="flex items-center justify-between text-[10px] text-emerald-300 mb-1">
+                    <span className="font-semibold">💎 Market Consensus</span>
+                  </div>
+                  <div className="text-sm font-extrabold font-mono text-emerald-400">
+                    {activeSpecimen.collectorMarketValue || '—'}
+                  </div>
+                  <div className="text-[9px] text-emerald-300/80 mt-0.5">Condition Weighted</div>
+                </div>
+              </div>
+            </div>
+
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#111c3d] text-xs space-y-1">
               <span className="font-bold text-slate-900 dark:text-white block">Visual Notes & Condition:</span>
               <p className="text-slate-600 dark:text-slate-300">
@@ -621,21 +800,21 @@ export default function BanknoteListView({
               </p>
             </div>
           </div>
-
-          {/* Interactive Photo Deskew & Edge Trimming Modal */}
-          <PhotoAdjusterModal
-            isOpen={adjustingSide !== null}
-            onClose={() => {
-              setAdjustingSide(null);
-              setAdjustingBlob(null);
-            }}
-            imageBlob={adjustingBlob}
-            initialPreviewUrl={adjustingSide === 'front' ? activeSpecimen.frontImageUrl || null : activeSpecimen.backImageUrl || null}
-            sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
-            onApply={handleApplyAdjustment}
-          />
         </div>
       )}
+
+      {/* Interactive Photo Deskew & Edge Trimming Modal */}
+      <PhotoAdjusterModal
+        isOpen={adjustingSide !== null}
+        onClose={() => {
+          setAdjustingSide(null);
+          setAdjustingBlob(null);
+        }}
+        imageBlob={adjustingBlob}
+        initialPreviewUrl={adjustingSide === 'front' ? activeSpecimen?.frontImageUrl || null : activeSpecimen?.backImageUrl || null}
+        sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
+        onApply={handleApplyAdjustment}
+      />
     </div>
   );
 }

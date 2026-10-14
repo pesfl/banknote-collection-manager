@@ -8,7 +8,7 @@ import type { LocalSpecimen } from '@/types';
 import InventoryCard from './InventoryCard';
 import SyncPanel from './SyncPanel';
 import { toast } from 'sonner';
-import { Trash2 } from 'lucide-react';
+import { Trash2, TrendingUp, RefreshCw, ExternalLink } from 'lucide-react';
 
 export default function InventoryList() {
   const [specimens, setSpecimens] = useState<LocalSpecimen[]>([]);
@@ -21,7 +21,16 @@ export default function InventoryList() {
 
     // Refresh every 2 seconds to catch sync updates
     const interval = setInterval(loadSpecimens, 2000);
-    return () => clearInterval(interval);
+
+    const handleSpecimenUpdated = () => {
+      loadSpecimens();
+    };
+    window.addEventListener('banknote-specimen-updated', handleSpecimenUpdated);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('banknote-specimen-updated', handleSpecimenUpdated);
+    };
   }, []);
 
   const loadSpecimens = async () => {
@@ -144,6 +153,50 @@ function SpecimenDetailModal({
 
   const [isFixing, setIsFixing] = useState(false);
   const [adjustingSide, setAdjustingSide] = useState<'front' | 'back' | null>(null);
+  const [isRefreshingValuation, setIsRefreshingValuation] = useState(false);
+
+  const handleRefreshValuation = async () => {
+    if (!specimen) return;
+    setIsRefreshingValuation(true);
+    try {
+      const ex = (specimen.extractedData || {}) as any;
+      const res = await fetch(`/api/valuation/${specimen.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          countryOfOrigin: ex.countryOfOrigin || ex.country,
+          denomination: ex.denomination,
+          issueYear: ex.issueYear || ex.seriesDate,
+          conditionGrade: ex.conditionGrade,
+          serialNumeric: ex.serialNumeric || ex.fullSerialNumber,
+          isReplacementNote: ex.isReplacementNote,
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const valData = json?.data || json;
+        await updateSpecimen({
+          ...specimen,
+          extractedData: {
+            ...ex,
+            valuation: valData,
+            collectorMarketValue: valData.collectorMarketValue,
+            pmgValue: valData.pmgValue,
+            numistaValue: valData.numistaValue,
+            ebayLastSold: valData.ebayLastSold,
+          }
+        });
+        toast.success(`Valuation updated: ${valData.collectorMarketValue}`);
+        onDelete();
+      } else {
+        toast.error('Could not refresh valuation');
+      }
+    } catch {
+      toast.error('Failed to contact valuation service');
+    } finally {
+      setIsRefreshingValuation(false);
+    }
+  };
 
   const handleAutoFixSide = async (side: 'front' | 'back') => {
     if (!specimen) return;
@@ -412,6 +465,84 @@ function SpecimenDetailModal({
           </div>
         </div>
 
+        {/* Multi-Source Valuation Matrix */}
+        {(() => {
+          const ex = (specimen.extractedData || {}) as any;
+          const valObj = ex.valuation || {};
+          const pmgVal = ex.pmgValue || valObj.pmgValue || '—';
+          const numistaVal = ex.numistaValue || valObj.numistaValue || '—';
+          const ebayVal = ex.ebayLastSold || valObj.ebayLastSold || '—';
+          const ebayUrl = ex.ebaySoldUrl || valObj.ebaySoldUrl;
+          const marketVal = ex.collectorMarketValue || valObj.collectorMarketValue || (typeof ex.valuation === 'string' && ex.valuation !== '$150' ? ex.valuation : '—');
+
+          return (
+            <div className="mb-4 p-3.5 rounded-2xl bg-linear-to-br from-slate-900 to-[#0e172e] border border-emerald-500/30 text-white shadow-lg space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold tracking-tight text-white flex items-center gap-1.5">
+                      Valuation Breakdown
+                      <span className="text-[10px] font-medium px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Live Consensus
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-slate-400">PMG, Numista & eBay sales</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefreshValuation}
+                  disabled={isRefreshingValuation}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-800/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="Re-query valuation engine"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isRefreshingValuation ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingValuation ? 'Updating...' : 'Refresh'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                  <span className="text-[10px] text-slate-400 block">🏛️ PMG Catalog</span>
+                  <span className="text-xs font-bold font-mono text-slate-200">{pmgVal}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                  <span className="text-[10px] text-slate-400 block">🪙 Numista</span>
+                  <span className="text-xs font-bold font-mono text-cyan-300">{numistaVal}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400">🛒 eBay Sold</span>
+                    {ebayUrl && (
+                      <a href={ebayUrl} target="_blank" rel="noreferrer" className="text-blue-400">
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold font-mono text-amber-300">
+                    {ebayVal && ebayVal !== '—' ? (
+                      ebayVal
+                    ) : ebayUrl ? (
+                      <a href={ebayUrl} target="_blank" rel="noreferrer" className="text-blue-400 underline font-sans text-[11px]">
+                        Check Sold ↗
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <span className="text-[10px] text-emerald-300 block font-semibold">💎 Market Consensus</span>
+                  <span className="text-xs font-extrabold font-mono text-emerald-400">{marketVal}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Details */}
         <div className="space-y-3 mb-6">
           <DetailRow
@@ -504,17 +635,17 @@ function SpecimenDetailModal({
             Close
           </button>
         </div>
-
-        {/* Interactive Photo Adjuster Modal */}
-        <PhotoAdjusterModal
-          isOpen={adjustingSide !== null}
-          onClose={() => setAdjustingSide(null)}
-          imageBlob={adjustingSide === 'front' ? activeFrontBlob : activeBackBlob}
-          initialPreviewUrl={adjustingSide === 'front' ? frontUrl : backUrl}
-          sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
-          onApply={handleApplyAdjustment}
-        />
       </div>
+
+      {/* Interactive Photo Adjuster Modal */}
+      <PhotoAdjusterModal
+        isOpen={adjustingSide !== null}
+        onClose={() => setAdjustingSide(null)}
+        imageBlob={adjustingSide === 'front' ? activeFrontBlob : activeBackBlob}
+        initialPreviewUrl={adjustingSide === 'front' ? frontUrl : backUrl}
+        sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
+        onApply={handleApplyAdjustment}
+      />
     </div>
   );
 }

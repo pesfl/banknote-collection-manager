@@ -217,10 +217,15 @@ function BanknotesInventoryContent() {
               backImageUrl: getSafeBlobUrl(l.backImageBlob),
               displayImageUrl: getSafeBlobUrl(l.frontImageBlob),
               notes: ex.notes || l.notes || 'Specimen captured locally.',
-              defectsAndAnomalies: ex.defectsAndAnomalies || undefined,
+              collectorMarketValue: ex.collectorMarketValue || ex.valuation?.collectorMarketValue || undefined,
+              numistaPmgValue: ex.numistaValue || ex.valuation?.numistaValue || ex.pmgValue || undefined,
+              pmgValue: ex.pmgValue || ex.valuation?.pmgValue || undefined,
+              numistaValue: ex.numistaValue || ex.valuation?.numistaValue || undefined,
+              ebayLastSold: ex.ebayLastSold || ex.valuation?.ebayLastSold || undefined,
+              ebaySoldUrl: ex.ebaySoldUrl || ex.valuation?.ebaySoldUrl || undefined,
               createdAt: new Date(l.capturedAt),
               updatedAt: new Date(l.capturedAt),
-            };
+            } as any;
           });
           setBanknotes([...mappedLocal, ...MOCK_BANKNOTES]);
         }
@@ -231,7 +236,14 @@ function BanknotesInventoryContent() {
 
     loadIndexedDb();
     const interval = setInterval(loadIndexedDb, 3000);
-    return () => clearInterval(interval);
+    const handleSpecimenUpdated = () => {
+      loadIndexedDb();
+    };
+    window.addEventListener('banknote-specimen-updated', handleSpecimenUpdated);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('banknote-specimen-updated', handleSpecimenUpdated);
+    };
   }, []);
 
   const sortedBanknotes = [...banknotes].sort((a, b) => {

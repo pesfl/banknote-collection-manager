@@ -162,6 +162,7 @@ export function useBanknoteCapture(): UseBanknoteCaptureReturn {
           backImageBlob: cleanBack,
           capturedAt: new Date(),
           syncStatus: 'pending',
+          extractionStatus: 'pending',
           notes,
           syncRetryCount: 0,
         };

@@ -161,9 +161,9 @@ function formatDenomination(rawDenom?: string, symbol: string = '$'): string {
 
 export default function BanknoteListItem({ banknote, imageUrl, onOpenViewer }: BanknoteListItemProps) {
   // Format currency value helpers
-  const pmgVal = banknote.numistaPmgValue || '$2,450';
-  const numistaVal = banknote.numistaPmgValue ? `$${(parseFloat(banknote.numistaPmgValue.replace(/[$,]/g, '')) * 0.85).toFixed(0)}` : '$2,100';
-  const marketVal = banknote.collectorMarketValue || '$2,750';
+  const pmgVal = (banknote as any).pmgValue || banknote.numistaPmgValue || '—';
+  const numistaVal = (banknote as any).numistaValue || (banknote.numistaPmgValue ? `$${(parseFloat(banknote.numistaPmgValue.replace(/[$,]/g, '')) * 0.85).toFixed(0)}` : '—');
+  const marketVal = banknote.collectorMarketValue || 'Valuation Pending';
   const grade = banknote.conditionGrade ? `${banknote.conditionGrade} 63` : 'UNC 63';
   const gradeName = banknote.conditionGrade === 'AU' ? 'About Uncirculated' : 'Uncirculated';
 

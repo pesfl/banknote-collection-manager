@@ -20,6 +20,18 @@
  *    Preserves natural paper tones and intaglio engraving depth without bleaching.
  */
 
+export interface CornerPoint {
+  x: number; // 0 to 1 normalized, or absolute pixel coordinate
+  y: number; // 0 to 1 normalized, or absolute pixel coordinate
+}
+
+export interface BanknoteCorners {
+  topLeft: CornerPoint;
+  topRight: CornerPoint;
+  bottomRight: CornerPoint;
+  bottomLeft: CornerPoint;
+}
+
 export interface CleanOptions {
   autoStraighten?: boolean;
   autoCropEdges?: boolean;
@@ -29,6 +41,7 @@ export interface CleanOptions {
   cropMarginPercent?: number; // 0 to 20%
   enhanceClarity?: boolean;
   quality?: number; // 0.85 to 0.98
+  corners?: BanknoteCorners; // Optional user-specified 4 corners for manual perspective rectification
 }
 
 export interface CleanResult {
@@ -406,14 +419,187 @@ export function detectBanknoteEdges(
 }
 
 /**
+ * Solve 3x3 Homography Matrix mapping 4 source points to 4 destination points.
+ * Uses Gaussian elimination with partial pivoting.
+ */
+export function getPerspectiveTransform(
+  src: { x: number; y: number }[],
+  dst: { x: number; y: number }[]
+): number[] {
+  const A: number[][] = [];
+  const B: number[] = [];
+
+  for (let i = 0; i < 4; i++) {
+    const sx = src[i].x;
+    const sy = src[i].y;
+    const dx = dst[i].x;
+    const dy = dst[i].y;
+
+    A.push([sx, sy, 1, 0, 0, 0, -dx * sx, -dx * sy]);
+    B.push(dx);
+    A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy]);
+    B.push(dy);
+  }
+
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+    [A[i], A[maxRow]] = [A[maxRow], A[i]];
+    [B[i], B[maxRow]] = [B[maxRow], B[i]];
+
+    const pivot = A[i][i];
+    if (Math.abs(pivot) < 1e-10) continue;
+
+    for (let j = i; j < n; j++) A[i][j] /= pivot;
+    B[i] /= pivot;
+
+    for (let k = 0; k < n; k++) {
+      if (k !== i) {
+        const factor = A[k][i];
+        for (let j = i; j < n; j++) A[k][j] -= factor * A[i][j];
+        B[k] -= factor * B[i];
+      }
+    }
+  }
+
+  return [
+    B[0], B[1], B[2],
+    B[3], B[4], B[5],
+    B[6], B[7], 1
+  ];
+}
+
+/**
+ * Warp quadrilateral defined by 4 corners into a rectified, unskewed rectangular canvas
+ * with subpixel bilinear interpolation.
+ */
+export function warpPerspectiveCanvas(
+  sourceCanvas: HTMLCanvasElement,
+  corners: BanknoteCorners
+): HTMLCanvasElement {
+  const srcW = sourceCanvas.width;
+  const srcH = sourceCanvas.height;
+
+  // Convert normalized corners (0 to 1) to canvas pixel coordinates
+  const toPixel = (pt: CornerPoint) => ({
+    x: pt.x <= 1.0 ? pt.x * srcW : pt.x,
+    y: pt.y <= 1.0 ? pt.y * srcH : pt.y,
+  });
+
+  const p0 = toPixel(corners.topLeft);
+  const p1 = toPixel(corners.topRight);
+  const p2 = toPixel(corners.bottomRight);
+  const p3 = toPixel(corners.bottomLeft);
+
+  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.hypot(a.x - b.x, a.y - b.y);
+
+  const topW = dist(p0, p1);
+  const bottomW = dist(p3, p2);
+  const leftH = dist(p0, p3);
+  const rightH = dist(p1, p2);
+
+  const outW = Math.max(100, Math.round(Math.max(topW, bottomW)));
+  const outH = Math.max(60, Math.round(Math.max(leftH, rightH)));
+
+  const dst = [
+    { x: 0, y: 0 },
+    { x: outW, y: 0 },
+    { x: outW, y: outH },
+    { x: 0, y: outH },
+  ];
+
+  const srcPoints = [p0, p1, p2, p3];
+  const invH = getPerspectiveTransform(dst, srcPoints);
+
+  const destCanvas = document.createElement('canvas');
+  destCanvas.width = outW;
+  destCanvas.height = outH;
+  const destCtx = destCanvas.getContext('2d', { willReadFrequently: true });
+  if (!destCtx) throw new Error('Could not create destination canvas context');
+
+  const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  if (!srcCtx) throw new Error('Could not get source canvas context');
+
+  const srcImageData = srcCtx.getImageData(0, 0, srcW, srcH);
+  const srcData = srcImageData.data;
+
+  const destImageData = destCtx.createImageData(outW, outH);
+  const destData = destImageData.data;
+
+  const h0 = invH[0], h1 = invH[1], h2 = invH[2];
+  const h3 = invH[3], h4 = invH[4], h5 = invH[5];
+  const h6 = invH[6], h7 = invH[7], h8 = invH[8];
+
+  for (let y = 0; y < outH; y++) {
+    const rowOffset = y * outW;
+    for (let x = 0; x < outW; x++) {
+      const denom = h6 * x + h7 * y + h8;
+      const sx = (h0 * x + h1 * y + h2) / denom;
+      const sy = (h3 * x + h4 * y + h5) / denom;
+
+      const destIdx = (rowOffset + x) * 4;
+
+      if (sx >= 0 && sx < srcW - 1 && sy >= 0 && sy < srcH - 1) {
+        const x0 = Math.floor(sx);
+        const y0 = Math.floor(sy);
+        const x1 = x0 + 1;
+        const y1 = y0 + 1;
+
+        const fx = sx - x0;
+        const fy = sy - y0;
+        const fx1 = 1 - fx;
+        const fy1 = 1 - fy;
+
+        const i00 = (y0 * srcW + x0) * 4;
+        const i10 = (y0 * srcW + x1) * 4;
+        const i01 = (y1 * srcW + x0) * 4;
+        const i11 = (y1 * srcW + x1) * 4;
+
+        destData[destIdx] = Math.round(
+          fx1 * fy1 * srcData[i00] +
+          fx  * fy1 * srcData[i10] +
+          fx1 * fy  * srcData[i01] +
+          fx  * fy  * srcData[i11]
+        );
+        destData[destIdx + 1] = Math.round(
+          fx1 * fy1 * srcData[i00 + 1] +
+          fx  * fy1 * srcData[i10 + 1] +
+          fx1 * fy  * srcData[i01 + 1] +
+          fx  * fy  * srcData[i11 + 1]
+        );
+        destData[destIdx + 2] = Math.round(
+          fx1 * fy1 * srcData[i00 + 2] +
+          fx  * fy1 * srcData[i10 + 2] +
+          fx1 * fy  * srcData[i01 + 2] +
+          fx  * fy  * srcData[i11 + 2]
+        );
+        destData[destIdx + 3] = 255;
+      } else {
+        destData[destIdx + 3] = 255;
+      }
+    }
+  }
+
+  destCtx.putImageData(destImageData, 0, 0);
+  return destCanvas;
+}
+
+/**
  * Safe Banknote Image Cleaner & Rectification
  * 
  * Pipeline:
  * 1. 90-degree user/orientation rotation
- * 2. Skew detection via Radon projection profile
- * 3. Centered leveled rotation (deskew) into canvas without clipping
- * 4. Safe bounding box detection ON LEVELED IMAGE with outward safety margin
- * 5. Idempotent output with strict numismatic color preservation
+ * 2. If manual 4 corners specified: Perspective Homography Warp to rectangular plane
+ * 3. Skew detection via Radon projection profile (for auto mode)
+ * 4. Centered leveled rotation (deskew) into canvas without clipping
+ * 5. Safe bounding box detection ON LEVELED IMAGE with outward safety margin
+ * 6. Idempotent output with strict numismatic color preservation
  */
 export async function cleanBanknoteImage(
   inputBlob: Blob,
@@ -428,6 +614,7 @@ export async function cleanBanknoteImage(
     cropMarginPercent = 0,
     enhanceClarity = false,
     quality = 0.95,
+    corners,
   } = options;
 
   return new Promise((resolve, reject) => {
@@ -473,7 +660,72 @@ export async function cleanBanknoteImage(
           baseCtx.drawImage(img, 0, 0);
           baseCtx.restore();
 
-          // 2. Skew angle detection via projection profile
+          // 2. Direct 4-Corner Manual Perspective Homography Warp (if specified)
+          if (corners) {
+            let warpedCanvas = warpPerspectiveCanvas(baseCanvas, corners);
+
+            // Optional manual angle deskew fine-tune
+            if (manualAngle !== 0) {
+              const rad = (manualAngle * Math.PI) / 180;
+              const absCos = Math.abs(Math.cos(rad));
+              const absSin = Math.abs(Math.sin(rad));
+              const rotW = Math.ceil(warpedCanvas.width * absCos + warpedCanvas.height * absSin);
+              const rotH = Math.ceil(warpedCanvas.width * absSin + warpedCanvas.height * absCos);
+              const rotCanvas = document.createElement('canvas');
+              rotCanvas.width = rotW;
+              rotCanvas.height = rotH;
+              const rotCtx = rotCanvas.getContext('2d', { willReadFrequently: true });
+              if (rotCtx) {
+                rotCtx.save();
+                rotCtx.translate(rotW / 2, rotH / 2);
+                rotCtx.rotate(-rad);
+                rotCtx.drawImage(warpedCanvas, -warpedCanvas.width / 2, -warpedCanvas.height / 2);
+                rotCtx.restore();
+                warpedCanvas = rotCanvas;
+              }
+            }
+
+            // Optional margin inset fine-tune
+            let outputCanvas = warpedCanvas;
+            if (cropMarginPercent > 0) {
+              const mX = Math.round(warpedCanvas.width * (cropMarginPercent / 100));
+              const mY = Math.round(warpedCanvas.height * (cropMarginPercent / 100));
+              const trimW = Math.max(100, warpedCanvas.width - 2 * mX);
+              const trimH = Math.max(60, warpedCanvas.height - 2 * mY);
+              const trimmedCanvas = document.createElement('canvas');
+              trimmedCanvas.width = trimW;
+              trimmedCanvas.height = trimH;
+              const tCtx = trimmedCanvas.getContext('2d', { willReadFrequently: true });
+              if (tCtx) {
+                tCtx.drawImage(warpedCanvas, mX, mY, trimW, trimH, 0, 0, trimW, trimH);
+                outputCanvas = trimmedCanvas;
+              }
+            }
+
+            if (enhanceClarity) {
+              const oCtx = outputCanvas.getContext('2d', { willReadFrequently: true });
+              if (oCtx) applySubtleSharpening(oCtx, outputCanvas.width, outputCanvas.height);
+            }
+
+            outputCanvas.toBlob(
+              (resultBlob) => {
+                const exportBlob = resultBlob || inputBlob;
+                const dataUrl = outputCanvas.toDataURL('image/jpeg', quality);
+                resolve({
+                  cleanedBlob: exportBlob,
+                  dataUrl,
+                  detectedSkew: 0,
+                  width: outputCanvas.width,
+                  height: outputCanvas.height,
+                });
+              },
+              'image/jpeg',
+              quality
+            );
+            return;
+          }
+
+          // 3. Skew angle detection via projection profile (Auto Mode)
           let finalAngle = manualAngle;
           if (autoStraighten && manualAngle === 0) {
             finalAngle = detectSkewAngleProfile(baseCtx, baseCanvas.width, baseCanvas.height);
