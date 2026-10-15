@@ -345,14 +345,27 @@ export default function ValuationMatrixPage() {
                   {liveResult.ebayLastSold ? (
                     liveResult.ebayLastSold
                   ) : liveResult.ebaySoldUrl ? (
-                    <a
-                      href={liveResult.ebaySoldUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-amber-400 hover:text-amber-300 font-sans underline"
-                    >
-                      Check Sold ↗
-                    </a>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <a
+                        href={liveResult.ebaySoldUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-400 hover:text-amber-300 font-sans underline"
+                        title="View completed & sold listings on eBay"
+                      >
+                        Sold ↗
+                      </a>
+                      <span className="text-slate-500">•</span>
+                      <a
+                        href={liveResult.ebayActiveUrl || liveResult.ebaySoldUrl.replace('&LH_Sold=1&LH_Complete=1', '')}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-emerald-400 hover:text-emerald-300 font-sans underline"
+                        title="View active live listings currently for sale on eBay"
+                      >
+                        Active ↗
+                      </a>
+                    </div>
                   ) : (
                     '—'
                   )}

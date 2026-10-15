@@ -15,9 +15,12 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Layers,
-  Menu
+  Menu,
+  Activity
 } from 'lucide-react';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { useBackgroundProcesses } from '@/hooks/useBackgroundProcesses';
+import { BackgroundProcessesDrawer } from '@/components/processes/BackgroundProcessesDrawer';
 
 interface AppHeaderProps {
   isCollapsed?: boolean;
@@ -32,10 +35,12 @@ export function AppHeader({
   const router = useRouter();
   const { data: session, status } = useSession();
   const { networkStatus, pendingCount, syncNow } = useOfflineSync();
+  const { status: queueStatus } = useBackgroundProcesses();
   const isOnline = networkStatus.isOnline;
   const isWifi = networkStatus.isWifi;
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showProcessesDrawer, setShowProcessesDrawer] = useState(false);
 
   // Skip header on specific auth pages if desired
   const isAuthPage = pathname?.startsWith('/auth');
@@ -49,7 +54,8 @@ export function AppHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0a1329] backdrop-blur-md transition-colors">
+    <>
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0a1329] backdrop-blur-md transition-colors">
       <div className="flex h-16 items-center justify-between px-3 sm:px-5 lg:px-7">
         {/* Left: Brand & Mobile Drawer Toggle */}
         <div className="flex items-center gap-3">
@@ -109,6 +115,39 @@ export function AppHeader({
             <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
             <span>Settings</span>
           </Link>
+
+          {/* Background AI Processes Monitor Button */}
+          <button 
+            type="button"
+            onClick={() => setShowProcessesDrawer(true)}
+            title="View Background AI Recognition & Valuation Processes"
+            className={`cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl transition-all ${
+              queueStatus.isProcessing
+                ? 'bg-blue-500/15 dark:bg-blue-950/60 border border-blue-500/40 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20'
+                : 'bg-slate-50 dark:bg-[#111c3d]/80 border border-slate-200 dark:border-slate-700/80 hover:border-blue-500 text-slate-700 dark:text-slate-300'
+            }`}
+          >
+            <div className="relative">
+              <Activity className={`h-4 w-4 ${queueStatus.isProcessing ? 'animate-pulse text-blue-500' : 'text-slate-500'}`} />
+              {queueStatus.isProcessing && (
+                <div className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-500 animate-ping" />
+              )}
+            </div>
+            <div className="text-left hidden sm:block">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider leading-tight">
+                AI Processes
+              </span>
+              <span className={`text-[11px] font-semibold block leading-tight ${
+                queueStatus.isProcessing ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-600 dark:text-slate-300'
+              }`}>
+                {queueStatus.isProcessing 
+                  ? `Active (${queueStatus.queueLength + 1})` 
+                  : queueStatus.queueLength > 0 
+                  ? `Queued (${queueStatus.queueLength})` 
+                  : 'Idle'}
+              </span>
+            </div>
+          </button>
 
           {/* Backup Status Card */}
           <div 
@@ -206,5 +245,10 @@ export function AppHeader({
         </div>
       </div>
     </header>
+    <BackgroundProcessesDrawer 
+      isOpen={showProcessesDrawer} 
+      onClose={() => setShowProcessesDrawer(false)} 
+    />
+  </>
   );
 }

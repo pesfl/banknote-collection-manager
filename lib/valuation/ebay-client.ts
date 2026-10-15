@@ -31,9 +31,14 @@ async function getEbayAppToken(): Promise<string | null> {
     return cachedToken.token;
   }
 
+  const isSandbox = clientId.includes('-SBX-');
+  const oauthUrl = isSandbox
+    ? 'https://api.sandbox.ebay.com/identity/v1/oauth2/token'
+    : 'https://api.ebay.com/identity/v1/oauth2/token';
+
   try {
     const credentials = Buffer.from(`${clientId.trim()}:${clientSecret.trim()}`).toString('base64');
-    const res = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+    const res = await fetch(oauthUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -44,7 +49,7 @@ async function getEbayAppToken(): Promise<string | null> {
     });
 
     if (!res.ok) {
-      console.warn('[eBay API] OAuth token request failed with status:', res.status);
+      console.warn(`[eBay API] OAuth token request (${isSandbox ? 'Sandbox' : 'Production'}) failed with status:`, res.status);
       return null;
     }
 
@@ -72,9 +77,13 @@ export async function fetchLiveEBaySoldRecord(cleanQuery: string): Promise<EbayS
     return null;
   }
 
+  const clientId = process.env.EBAY_CLIENT_ID || process.env.EBAY_APP_ID || '';
+  const isSandbox = clientId.includes('-SBX-');
+  const baseUrl = isSandbox ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
+
   try {
     // Category 11116 is Coins & Paper Money > Paper Money: World
-    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(cleanQuery)}&category_ids=11116&limit=10&sort=newlyListed`;
+    const url = `${baseUrl}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(cleanQuery)}&category_ids=11116&limit=10&sort=newlyListed`;
     
     const res = await fetch(url, {
       headers: {

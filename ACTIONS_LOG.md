@@ -135,3 +135,23 @@
 - 2026-10-15: Fixed worker interval lockup on client Fast Refresh
 - 2026-10-15: Consolidated redundant dashboard capture action buttons into single Add Note button
 - 2026-10-15: Upgraded Numista API integration from obsolete 404 /v2 endpoints to official /v3/types and /v3/types/{id}/issues/{id}/prices
+- 2026-10-15: Added PMG/PCGS certified slab ground-truth rules to Gemini extraction prompt
+- 2026-10-15: Added Sheldon 70-point numerical grade parsing for certified banknote slabs
+- 2026-10-15: Disambiguated Philippine BEP/Victory issues from US Dollar in AI extraction
+- 2026-10-15: Optimized eBay search queries to prevent 0-match sold listings and support Sandbox/Production routing
+- 2026-10-15: Added WebP and PNG binary signature auto-detection to Gemini Vision API extraction
+- 2026-10-15: Implemented native eBay Boolean search syntax (parentheses-comma OR groups, exclusion operators)
+- 2026-10-15: Added issue year to eBay query builder and added dual Sold ↗ and Active ↗ links across all inventory views
+- 2026-10-15: Built real-time Background Process Monitor page (/processes) and slide-over drawer with queue metrics, job status, pause/resume, and live event console
+- 2026-10-15: Removed resource-intensive ReScan Database button from background processes dashboard and drawer to conserve processing power
+- 2026-10-15: Created dedicated full-page Banknote Deep-Dive Inspector route (/banknotes/[id]) with 6 structured category tabs
+- 2026-10-15: Streamlined non-active sidebar items (/countries, /duplicates, /valuable, /missing-info, /recently-added) to display clean showcase banners without roadmap blueprints or mock preview wireframes
+- 2026-10-15: Restored old condensed specimen overlay modal in BanknoteListView matching reference specifications (Auto-Fix Both Images, side-by-side scans with Reset/Fix/Adjust, Multi-Source Valuation Matrix with live consensus, 4-column metric strip, specimen notes, and bottom action bar)
+- 2026-10-15: Configured banknote card image click to trigger condensed inspection overlay
+- 2026-10-15: Rerouted "All Fields View" button on banknote list cards to navigate directly to the full-page view (/banknotes/[id])
+- 2026-10-15: Added "All Fields View →" navigation buttons to the condensed overlay modal (both in the bottom action bar next to Close and in the header)
+
+## 2026-10-16
+- 2026-10-16: Created shared CondensedSpecimenModal to eliminate duplicated inspector code
+- 2026-10-16: Consolidated Home & All Notes specimen overlays to use shared component
+- 2026-10-16: Verified full feature parity and All Fields View navigation across views

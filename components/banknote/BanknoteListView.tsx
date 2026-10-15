@@ -9,17 +9,28 @@ import {
   Filter, 
   Download, 
   Layers,
-  X,
-  TrendingUp,
-  RefreshCw,
-  ExternalLink
+  X
 } from 'lucide-react';
 import type { Banknote } from '@/types';
 import BanknoteListItem from './BanknoteListItem';
 import { toast } from 'sonner';
-import PhotoAdjusterModal from '@/components/mobile/PhotoAdjusterModal';
-import { cleanBanknoteImage, ensureImageBlob } from '@/lib/media/banknote-cleaner';
-import { getSpecimen, updateSpecimen } from '@/lib/offline/idb';
+import CondensedSpecimenModal from './CondensedSpecimenModal';
+
+function getCountryFlag(country?: string): string {
+  const c = (country || '').toLowerCase().trim();
+  if (c.includes('india')) return '🇮🇳';
+  if (c.includes('united states') || c.includes('usa') || c === 'us') return '🇺🇸';
+  if (c.includes('canada')) return '🇨🇦';
+  if (c.includes('brazil') || c.includes('brasil')) return '🇧🇷';
+  if (c.includes('bolivia')) return '🇧🇴';
+  if (c.includes('philippine') || c.includes('filipino')) return '🇵🇭';
+  if (c.includes('united kingdom') || c.includes('uk')) return '🇬🇧';
+  if (c.includes('japan')) return '🇯🇵';
+  if (c.includes('china')) return '🇨🇳';
+  if (c.includes('germany')) return '🇩🇪';
+  if (c.includes('france')) return '🇫🇷';
+  return '💵';
+}
 
 interface BanknoteListViewProps {
   banknotes?: Banknote[];
@@ -44,11 +55,6 @@ export default function BanknoteListView({
   const [selectedGrade, setSelectedGrade] = useState<string>('ALL');
   const [activeSpecimen, setActiveSpecimen] = useState<Banknote | null>(null);
 
-  const [isFixing, setIsFixing] = useState(false);
-  const [adjustingSide, setAdjustingSide] = useState<'front' | 'back' | null>(null);
-  const [adjustingBlob, setAdjustingBlob] = useState<Blob | null>(null);
-  const [originalImages, setOriginalImages] = useState<{ [id: string]: { front?: string; back?: string } }>({});
-  const [isRefreshingValuation, setIsRefreshingValuation] = useState(false);
 
   // Synchronize activeSpecimen when parent banknotes collection updates
   useEffect(() => {
@@ -65,63 +71,9 @@ export default function BanknoteListView({
     }
   }, [banknotes, activeSpecimen]);
 
-  const handleRefreshValuation = async () => {
-    if (!activeSpecimen) return;
-    setIsRefreshingValuation(true);
-    try {
-      const res = await fetch(`/api/valuation/${activeSpecimen.id || 'temp'}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          countryOfOrigin: activeSpecimen.countryOfOrigin,
-          denomination: activeSpecimen.denomination,
-          issueYear: activeSpecimen.issueYear,
-          conditionGrade: activeSpecimen.conditionGrade,
-          serialNumeric: activeSpecimen.serialNumeric || activeSpecimen.fullSerialNumber,
-          isReplacementNote: activeSpecimen.isReplacementNote,
-        })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const valData = json?.data || json;
-        const updated: Banknote = {
-          ...activeSpecimen,
-          collectorMarketValue: valData.collectorMarketValue || activeSpecimen.collectorMarketValue,
-          numistaPmgValue: valData.numistaValue || activeSpecimen.numistaPmgValue,
-          pmgValue: valData.pmgValue,
-          numistaValue: valData.numistaValue,
-          ebayLastSold: valData.ebayLastSold,
-          ebaySoldUrl: valData.ebaySoldUrl,
-        } as any;
-        setActiveSpecimen(updated);
-        onSpecimenUpdated?.(updated);
 
-        if (activeSpecimen.id) {
-          const local = await getSpecimen(activeSpecimen.id);
-          if (local) {
-            await updateSpecimen({
-              ...local,
-              extractedData: {
-                ...(local.extractedData || {}),
-                valuation: valData,
-                collectorMarketValue: valData.collectorMarketValue,
-                pmgValue: valData.pmgValue,
-                numistaValue: valData.numistaValue,
-                ebayLastSold: valData.ebayLastSold,
-              }
-            });
-          }
-        }
-        toast.success(`Valuation updated: ${valData.collectorMarketValue}`);
-      } else {
-        toast.error('Could not refresh valuation');
-      }
-    } catch {
-      toast.error('Failed to contact valuation service');
-    } finally {
-      setIsRefreshingValuation(false);
-    }
-  };
+
+
 
   const handleSort = (sort: 'recent' | 'country' | 'value') => {
     setSortBy(sort);
@@ -139,259 +91,6 @@ export default function BanknoteListView({
     toast.success('Collection exported as JSON');
   };
 
-  const handleStartAdjust = async (side: 'front' | 'back') => {
-    if (!activeSpecimen) return;
-    const url = side === 'front' ? activeSpecimen.frontImageUrl : activeSpecimen.backImageUrl;
-    if (!url) {
-      toast.error(`No ${side} image available to adjust`);
-      return;
-    }
-    try {
-      toast.info(`Preparing ${side} image editor...`);
-      const blob = await ensureImageBlob(url);
-      setAdjustingBlob(blob);
-      setAdjustingSide(side);
-    } catch (err) {
-      console.error('Error loading image for adjuster:', err);
-      toast.error(`Could not load ${side} image for editing`);
-    }
-  };
-
-  const handleAutoFixSide = async (side: 'front' | 'back') => {
-    if (!activeSpecimen) return;
-    const url = side === 'front' ? activeSpecimen.frontImageUrl : activeSpecimen.backImageUrl;
-    if (!url) {
-      toast.error(`No ${side} image available`);
-      return;
-    }
-    setIsFixing(true);
-    try {
-      toast.info(`Straightening and cropping ${side} photo...`);
-      const blob = await ensureImageBlob(url);
-      const cleanRes = await cleanBanknoteImage(blob, {
-        autoStraighten: true,
-        autoCropEdges: true,
-        autoRotateLandscape: false,
-        cropMarginPercent: 0,
-        enhanceClarity: false,
-      });
-
-      if (cleanRes && cleanRes.cleanedBlob) {
-        const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
-        if (!originalImages[specKey]) {
-          setOriginalImages(prev => ({
-            ...prev,
-            [specKey]: {
-              front: activeSpecimen.frontImageUrl,
-              back: activeSpecimen.backImageUrl,
-            }
-          }));
-        }
-
-        const updated: Banknote = {
-          ...activeSpecimen,
-          [side === 'front' ? 'frontImageUrl' : 'backImageUrl']: cleanRes.dataUrl,
-          ...(side === 'front' ? { displayImageUrl: cleanRes.dataUrl } : {}),
-        };
-        setActiveSpecimen(updated);
-        onSpecimenUpdated?.(updated);
-
-        if (activeSpecimen.id) {
-          try {
-            const local = await getSpecimen(activeSpecimen.id);
-            if (local) {
-              await updateSpecimen({
-                ...local,
-                [side === 'front' ? 'frontImageBlob' : 'backImageBlob']: cleanRes.cleanedBlob,
-              });
-            }
-          } catch (e) {
-            console.warn('IDB update skipped:', e);
-          }
-        }
-
-        toast.success(`✨ ${side === 'front' ? 'Front' : 'Back'} image straightened & cropped!`);
-      }
-    } catch (err) {
-      console.error('Auto fix error:', err);
-      toast.error(`Could not fix ${side} image`);
-    } finally {
-      setIsFixing(false);
-    }
-  };
-
-  const handleAutoFixBoth = async () => {
-    if (!activeSpecimen) return;
-    const frontUrl = activeSpecimen.frontImageUrl;
-    const backUrl = activeSpecimen.backImageUrl;
-    if (!frontUrl && !backUrl) {
-      toast.error('No images available to fix');
-      return;
-    }
-
-    setIsFixing(true);
-    try {
-      toast.info('Straightening and cropping both note images...');
-      const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
-      if (!originalImages[specKey]) {
-        setOriginalImages(prev => ({
-          ...prev,
-          [specKey]: {
-            front: activeSpecimen.frontImageUrl,
-            back: activeSpecimen.backImageUrl,
-          }
-        }));
-      }
-
-      const fixes: Promise<any>[] = [];
-      if (frontUrl) {
-        fixes.push(
-          ensureImageBlob(frontUrl).then(b =>
-            cleanBanknoteImage(b, {
-              autoStraighten: true,
-              autoCropEdges: true,
-              autoRotateLandscape: false,
-              cropMarginPercent: 0,
-              enhanceClarity: false,
-            })
-          )
-        );
-      } else {
-        fixes.push(Promise.resolve(null));
-      }
-
-      if (backUrl) {
-        fixes.push(
-          ensureImageBlob(backUrl).then(b =>
-            cleanBanknoteImage(b, {
-              autoStraighten: true,
-              autoCropEdges: true,
-              autoRotateLandscape: false,
-              cropMarginPercent: 0,
-              enhanceClarity: false,
-            })
-          )
-        );
-      } else {
-        fixes.push(Promise.resolve(null));
-      }
-
-      const [cleanFront, cleanBack] = await Promise.all(fixes);
-
-      const updated: Banknote = {
-        ...activeSpecimen,
-        frontImageUrl: cleanFront?.dataUrl || activeSpecimen.frontImageUrl,
-        backImageUrl: cleanBack?.dataUrl || activeSpecimen.backImageUrl,
-        displayImageUrl: cleanFront?.dataUrl || activeSpecimen.displayImageUrl,
-      };
-      setActiveSpecimen(updated);
-      onSpecimenUpdated?.(updated);
-
-      if (activeSpecimen.id) {
-        try {
-          const local = await getSpecimen(activeSpecimen.id);
-          if (local) {
-            await updateSpecimen({
-              ...local,
-              ...(cleanFront?.cleanedBlob ? { frontImageBlob: cleanFront.cleanedBlob } : {}),
-              ...(cleanBack?.cleanedBlob ? { backImageBlob: cleanBack.cleanedBlob } : {}),
-            });
-          }
-        } catch (e) {
-          console.warn('IDB update skipped:', e);
-        }
-      }
-
-      toast.success('✨ Both specimen images straightened and cropped!');
-    } catch (err) {
-      console.error('Auto fix both error:', err);
-      toast.error('Could not fix specimen images');
-    } finally {
-      setIsFixing(false);
-    }
-  };
-
-  const handleResetOriginal = async (side: 'front' | 'back') => {
-    if (!activeSpecimen) return;
-    const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
-    const orig = originalImages[specKey];
-    const origUrl = side === 'front' ? orig?.front : orig?.back;
-    if (!origUrl) {
-      toast.info(`${side === 'front' ? 'Front' : 'Back'} image is already at original state`);
-      return;
-    }
-
-    try {
-      const updated: Banknote = {
-        ...activeSpecimen,
-        [side === 'front' ? 'frontImageUrl' : 'backImageUrl']: origUrl,
-        ...(side === 'front' ? { displayImageUrl: origUrl } : {}),
-      };
-      setActiveSpecimen(updated);
-      onSpecimenUpdated?.(updated);
-
-      if (activeSpecimen.id) {
-        try {
-          const local = await getSpecimen(activeSpecimen.id);
-          if (local) {
-            const origBlob = await ensureImageBlob(origUrl);
-            await updateSpecimen({
-              ...local,
-              [side === 'front' ? 'frontImageBlob' : 'backImageBlob']: origBlob,
-            });
-          }
-        } catch (e) {
-          console.warn('IDB revert skipped:', e);
-        }
-      }
-
-      toast.success(`Reset ${side} photo to original`);
-    } catch {
-      toast.error(`Could not reset ${side} photo`);
-    }
-  };
-
-  const handleApplyAdjustment = async (cleanedBlob: Blob, cleanedPreview: string) => {
-    if (!activeSpecimen || !adjustingSide) return;
-    try {
-      const specKey = activeSpecimen.id || activeSpecimen.fullSerialNumber || 'specimen';
-      if (!originalImages[specKey]) {
-        setOriginalImages(prev => ({
-          ...prev,
-          [specKey]: {
-            front: activeSpecimen.frontImageUrl,
-            back: activeSpecimen.backImageUrl,
-          }
-        }));
-      }
-
-      const updated: Banknote = {
-        ...activeSpecimen,
-        [adjustingSide === 'front' ? 'frontImageUrl' : 'backImageUrl']: cleanedPreview,
-        ...(adjustingSide === 'front' ? { displayImageUrl: cleanedPreview } : {}),
-      };
-      setActiveSpecimen(updated);
-      onSpecimenUpdated?.(updated);
-
-      if (activeSpecimen.id) {
-        try {
-          const local = await getSpecimen(activeSpecimen.id);
-          if (local) {
-            await updateSpecimen({
-              ...local,
-              [adjustingSide === 'front' ? 'frontImageBlob' : 'backImageBlob']: cleanedBlob,
-            });
-          }
-        } catch (e) {
-          console.warn('IDB update skipped:', e);
-        }
-      }
-
-      toast.success(`✨ ${adjustingSide === 'front' ? 'Front' : 'Back'} photo updated and saved!`);
-    } catch {
-      toast.error('Failed to save adjusted photo');
-    }
-  };
 
   const filteredBanknotes = banknotes.filter(b => {
     const matchesSearch = 
@@ -573,247 +272,18 @@ export default function BanknoteListView({
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* HIGH-RES SPECIMEN INSPECTOR MODAL                                         */}
-      {/* ========================================================================= */}
-      {activeSpecimen && (
-        <div 
-          onClick={() => setActiveSpecimen(null)}
-          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl bg-white dark:bg-[#0b132b] rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  {activeSpecimen.countryOfOrigin} {activeSpecimen.denomination} ({activeSpecimen.issueYear})
-                </h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  Pick {activeSpecimen.pickNumber} | Serial: {activeSpecimen.fullSerialNumber}
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveSpecimen(null)}
-                className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Quick Auto-Fix Both Button */}
-            <button
-              type="button"
-              onClick={handleAutoFixBoth}
-              disabled={isFixing}
-              className="w-full py-2.5 px-4 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
-            >
-              <span className={isFixing ? 'animate-spin' : ''}>🪄</span>
-              <span>{isFixing ? 'Auto-Fixing Images...' : 'Auto-Fix Both Images (Crop & Straighten)'}</span>
-            </button>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="rounded-xl overflow-hidden border-2 border-[#00c2cb] bg-slate-100 dark:bg-slate-900">
-                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    Front Specimen Scan
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleResetOriginal('front')}
-                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-md transition-colors cursor-pointer"
-                      title="Restore original unedited photo"
-                    >
-                      <span>↺ Reset</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAutoFixSide('front')}
-                      disabled={isFixing}
-                      className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <span>🪄 Fix Image</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStartAdjust('front')}
-                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <span>✂️ Adjust</span>
-                    </button>
-                  </div>
-                </div>
-                <img
-                  src={activeSpecimen.frontImageUrl || 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=800&auto=format&fit=crop&q=80'}
-                  alt="Front Scan"
-                  className="w-full h-56 object-contain bg-slate-950/60 p-2"
-                />
-              </div>
-
-              <div className="rounded-xl overflow-hidden border-2 border-[#00c2cb] bg-slate-100 dark:bg-slate-900">
-                <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    Back Specimen Scan
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleResetOriginal('back')}
-                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-md transition-colors cursor-pointer"
-                      title="Restore original unedited photo"
-                    >
-                      <span>↺ Reset</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAutoFixSide('back')}
-                      disabled={isFixing}
-                      className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <span>🪄 Fix Image</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStartAdjust('back')}
-                      className="px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <span>✂️ Adjust</span>
-                    </button>
-                  </div>
-                </div>
-                <img
-                  src={activeSpecimen.backImageUrl || 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=800&auto=format&fit=crop&q=80'}
-                  alt="Back Scan"
-                  className="w-full h-56 object-contain bg-slate-950/60 p-2"
-                />
-              </div>
-            </div>
-
-            {/* Multi-Source Valuation Matrix */}
-            <div className="p-3.5 rounded-2xl bg-linear-to-br from-slate-900 to-[#0e172e] border border-emerald-500/30 text-white shadow-lg space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold tracking-tight text-white flex items-center gap-1.5">
-                      Multi-Source Valuation Matrix
-                      <span className="text-[10px] font-medium px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        Live Consensus
-                      </span>
-                    </h4>
-                    <p className="text-[10px] text-slate-400">Harmonized from PMG World Paper Money, Numista, & completed eBay sales</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRefreshValuation}
-                  disabled={isRefreshingValuation}
-                  className="px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-800/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                  title="Re-query valuation engine with current condition and serial features"
-                >
-                  <RefreshCw className={`h-3 w-3 ${isRefreshingValuation ? 'animate-spin' : ''}`} />
-                  <span>{isRefreshingValuation ? 'Updating...' : 'Refresh Live'}</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {/* 1. PMG Catalog */}
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                    <span>🏛️ PMG Catalog</span>
-                  </div>
-                  <div className="text-sm font-bold font-mono text-slate-200">
-                    {(activeSpecimen as any).pmgValue || (activeSpecimen.numistaPmgValue?.split('/')?.[0]?.trim()) || '—'}
-                  </div>
-                  <div className="text-[9px] text-slate-400 mt-0.5">Catalog Anchor</div>
-                </div>
-
-                {/* 2. Numista Value */}
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                    <span>🪙 Numista</span>
-                  </div>
-                  <div className="text-sm font-bold font-mono text-cyan-300">
-                    {(activeSpecimen as any).numistaValue || (activeSpecimen.numistaPmgValue?.split('/')?.[1]?.trim()) || '—'}
-                  </div>
-                  <div className="text-[9px] text-slate-400 mt-0.5">Community Curve</div>
-                </div>
-
-                {/* 3. eBay Last Sold */}
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                    <span>🛒 eBay Last Sold</span>
-                    {(activeSpecimen as any).ebaySoldUrl && (
-                      <a
-                        href={(activeSpecimen as any).ebaySoldUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-400 hover:text-blue-300 transition-colors"
-                        title="View completed sold listings on eBay"
-                      >
-                        <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
-                    )}
-                  </div>
-                  <div className="text-sm font-bold font-mono text-amber-300">
-                    {(activeSpecimen as any).ebayLastSold ? (
-                      (activeSpecimen as any).ebayLastSold
-                    ) : (activeSpecimen as any).ebaySoldUrl ? (
-                      <a
-                        href={(activeSpecimen as any).ebaySoldUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300 font-sans flex items-center gap-1 underline"
-                      >
-                        <span>Check Sold ↗</span>
-                      </a>
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                  <div className="text-[9px] text-slate-400 mt-0.5">
-                    {(activeSpecimen as any).ebayLastSold ? 'Verified Sale' : 'Live Marketplace Search'}
-                  </div>
-                </div>
-
-                {/* 4. Collector Market Value */}
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-colors">
-                  <div className="flex items-center justify-between text-[10px] text-emerald-300 mb-1">
-                    <span className="font-semibold">💎 Market Consensus</span>
-                  </div>
-                  <div className="text-sm font-extrabold font-mono text-emerald-400">
-                    {activeSpecimen.collectorMarketValue || '—'}
-                  </div>
-                  <div className="text-[9px] text-emerald-300/80 mt-0.5">Condition Weighted</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#111c3d] text-xs space-y-1">
-              <span className="font-bold text-slate-900 dark:text-white block">Visual Notes & Condition:</span>
-              <p className="text-slate-600 dark:text-slate-300">
-                {activeSpecimen.notes || 'Original crisp paper with vibrant colors and sharp margins.'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Interactive Photo Deskew & Edge Trimming Modal */}
-      <PhotoAdjusterModal
-        isOpen={adjustingSide !== null}
-        onClose={() => {
-          setAdjustingSide(null);
-          setAdjustingBlob(null);
+      {/* Shared Condensed Specimen Modal */}
+      <CondensedSpecimenModal
+        banknote={activeSpecimen}
+        isOpen={activeSpecimen !== null}
+        onClose={() => setActiveSpecimen(null)}
+        onSpecimenUpdated={(updated) => {
+          setActiveSpecimen(updated);
+          onSpecimenUpdated?.(updated);
         }}
-        imageBlob={adjustingBlob}
-        initialPreviewUrl={adjustingSide === 'front' ? activeSpecimen?.frontImageUrl || null : activeSpecimen?.backImageUrl || null}
-        sideLabel={adjustingSide === 'front' ? 'Front' : 'Back'}
-        onApply={handleApplyAdjustment}
+        onSpecimenDeleted={(id) => {
+          setActiveSpecimen(null);
+        }}
       />
     </div>
   );

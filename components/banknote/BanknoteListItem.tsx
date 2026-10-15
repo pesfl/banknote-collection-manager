@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import type { Banknote } from '@/types';
 import { 
   Calendar, 
@@ -39,6 +40,10 @@ function getCountryCurrencyInfo(country?: string, currency?: string, denominatio
   // USA
   if (c.includes('united states') || c.includes('usa') || c.includes('america') || c === 'us' || cur.includes('us dollar') || cur === 'usd') {
     return { flag: '🇺🇸', symbol: '$', currencyName: 'US Dollar', code: 'USD' };
+  }
+  // Philippines
+  if (c.includes('philippine') || c.includes('filipino') || cur.includes('piso') || cur.includes('php') || (cur.includes('peso') && (c.includes('phil') || c.includes('islands'))) || combo.includes('₱')) {
+    return { flag: '🇵🇭', symbol: '₱', currencyName: 'Philippine Peso', code: 'PHP' };
   }
   // Canada
   if (c.includes('canada') || cur.includes('cad') || cur.includes('canadian')) {
@@ -182,11 +187,19 @@ export default function BanknoteListItem({ banknote, imageUrl, onOpenViewer }: B
         {/* ========================================================================= */}
         {/* 1. IMAGE STACKER (Front over Back with Cyan Border & Zoom Lens)           */}
         {/* ========================================================================= */}
-        <div className="relative w-full xl:w-52 shrink-0 rounded-xl overflow-hidden border-2 border-[#00c2cb] dark:border-[#00a3bf] bg-slate-100 dark:bg-slate-900 flex flex-col justify-between group">
+        <div 
+          onClick={() => onOpenViewer?.(banknote)}
+          className="relative w-full xl:w-52 shrink-0 rounded-xl overflow-hidden border-2 border-[#00c2cb] dark:border-[#00a3bf] bg-slate-100 dark:bg-slate-900 flex flex-col justify-between group cursor-pointer"
+          title="Click image to open preview overlay"
+        >
           {/* Zoom Lens Button */}
           <button
-            onClick={() => onOpenViewer?.(banknote)}
-            title="Inspect High-Res Specimen"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenViewer?.(banknote);
+            }}
+            title="Inspect Specimen"
             className="absolute top-2 right-2 z-10 h-7 w-7 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white flex items-center justify-center backdrop-blur-xs transition-transform hover:scale-110 shadow-md"
           >
             <Search className="h-3.5 w-3.5" />
@@ -467,6 +480,16 @@ export default function BanknoteListItem({ banknote, imageUrl, onOpenViewer }: B
               {noteId}
             </span>
           </div>
+
+          {/* View All Fields Button (Rerouted to Dedicated Full Page View) */}
+          <Link
+            href={`/banknotes/${encodeURIComponent(banknote.id || '')}`}
+            className="w-full py-1.5 px-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 hover:bg-[#0066ff] text-blue-600 dark:text-blue-300 hover:text-white border border-blue-200 dark:border-blue-900/50 hover:border-blue-600 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer group/btn"
+            title="Open Full Page View with All Fields"
+          >
+            <span>All Fields View</span>
+            <span className="transition-transform group-hover/btn:translate-x-0.5">→</span>
+          </Link>
         </div>
 
       </div>

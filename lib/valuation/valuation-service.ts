@@ -319,30 +319,65 @@ export async function fetchNumistaValuation(input: ValuationQueryInput): Promise
  * Build clean, high-match search query for eBay completed/sold marketplace
  */
 export function buildCleanEBayQuery(input: ValuationQueryInput): string {
-  const country = (input.countryOfOrigin || '').replace(/unknown/i, '').trim();
-
-  // Convert currency symbols into plain English keywords that eBay indexes
-  let denom = (input.denomination || '').trim();
-  denom = denom
-    .replace(/₹/g, ' Rupees ')
-    .replace(/£/g, ' Pounds ')
-    .replace(/€/g, ' Euro ')
-    .replace(/¥/g, ' Yen ')
-    .replace(/\$/g, ' Dollars ')
-    .replace(/R\$/g, ' Reais ');
-
-  // Strip non-alphanumeric punctuation
-  denom = denom.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-
-  // Clean pick number - exclude placeholders like P-Pending, P-Unknown
-  let pick = (input.pickNumber || '').trim();
-  if (/pending|unknown|none/i.test(pick)) {
-    pick = '';
+  // Extract 4-digit issue year if present (e.g., 1941, 1986, 2018)
+  let yearPart = '';
+  if (input.issueYear) {
+    const yMatch = input.issueYear.match(/\b(18|19|20)\d{2}\b/);
+    if (yMatch) {
+      yearPart = yMatch[0];
+    }
   }
 
-  // Combine clean search terms: e.g. "India 10 Rupees banknote"
-  const terms = [country, denom, pick, 'banknote'].filter(Boolean).join(' ');
-  return terms.replace(/\s+/g, ' ').trim();
+  const rawCountry = (input.countryOfOrigin || '').replace(/unknown/i, '').trim();
+  let countryGroup = rawCountry;
+  if (/philippines/i.test(rawCountry)) {
+    countryGroup = '(Philippines,Philippine)';
+  } else if (/united states|usa/i.test(rawCountry)) {
+    countryGroup = '(USA,"United States",US)';
+  } else if (/united kingdom|britain|england/i.test(rawCountry)) {
+    countryGroup = '(UK,Britain,England)';
+  } else if (/canada/i.test(rawCountry)) {
+    countryGroup = 'Canada';
+  } else if (/india/i.test(rawCountry)) {
+    countryGroup = 'India';
+  }
+
+  // Extract numeric and currency parts from denomination
+  const rawDenom = (input.denomination || '').trim();
+  const numMatch = rawDenom.match(/\d[\d,.]*/);
+  const numberPart = numMatch ? numMatch[0] : '';
+
+  let currencyGroup = '';
+  if (/piso|peso/i.test(rawDenom)) {
+    currencyGroup = '(Piso,Pesos,Pisos)';
+  } else if (/rupee|inr|₹/i.test(rawDenom)) {
+    currencyGroup = '(Rupees,Rupee)';
+  } else if (/dollar|usd|\$/i.test(rawDenom)) {
+    currencyGroup = '(Dollars,Dollar)';
+  } else if (/pound|gbp|£/i.test(rawDenom)) {
+    currencyGroup = '(Pounds,Pound)';
+  } else if (/yen|jpy|¥/i.test(rawDenom)) {
+    currencyGroup = 'Yen';
+  } else if (/euro|eur|€/i.test(rawDenom)) {
+    currencyGroup = 'Euro';
+  }
+
+  // Star / Replacement note Boolean synonyms
+  let starGroup = '';
+  if (input.isReplacementNote) {
+    starGroup = '(Star,Replacement,"*")';
+  }
+
+  // Assemble query with Boolean groups: Year first (e.g. "1941"), then Country, then Denomination
+  const queryParts = [yearPart, countryGroup, numberPart, currencyGroup, starGroup].filter(Boolean);
+
+  // If query is sparse, add banknote
+  if (queryParts.length < 2) {
+    queryParts.push('banknote');
+  }
+
+  // Append negative filter to eliminate novelty fakes and replicas
+  return queryParts.join(' ') + ' -replica -reproduction';
 }
 
 import { fetchLiveEBaySoldRecord } from './ebay-client';
@@ -353,12 +388,14 @@ import { fetchLiveEBaySoldRecord } from './ebay-client';
 export async function fetchEBaySoldValuation(input: ValuationQueryInput): Promise<{
   ebayLastSoldPrice: number | null;
   ebaySoldUrl: string;
+  ebayActiveUrl: string;
   source: string;
   title?: string;
   soldDate?: string;
 }> {
   const cleanQuery = buildCleanEBayQuery(input);
-  const searchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanQuery)}&LH_Sold=1&LH_Complete=1`;
+  const searchSoldUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanQuery)}&LH_Sold=1&LH_Complete=1`;
+  const searchActiveUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanQuery)}`;
 
   // 1. Try real live eBay Browse API if credentials exist
   try {
@@ -366,7 +403,8 @@ export async function fetchEBaySoldValuation(input: ValuationQueryInput): Promis
     if (liveRecord && liveRecord.price > 0) {
       return {
         ebayLastSoldPrice: liveRecord.price,
-        ebaySoldUrl: liveRecord.itemUrl || searchUrl,
+        ebaySoldUrl: liveRecord.itemUrl || searchSoldUrl,
+        ebayActiveUrl: searchActiveUrl,
         source: `eBay Live Transaction (${liveRecord.title})`,
         title: liveRecord.title,
         soldDate: liveRecord.soldDate,
@@ -376,11 +414,11 @@ export async function fetchEBaySoldValuation(input: ValuationQueryInput): Promis
     console.warn('[eBay Valuation] Live search failed:', err);
   }
 
-  // 2. If no eBay API credentials are set or no exact match returned,
-  // return null so we DO NOT display a fake/assumed price.
+  // 2. Return verifiable search URLs for both Sold and Active listings
   return {
     ebayLastSoldPrice: null,
-    ebaySoldUrl: searchUrl,
+    ebaySoldUrl: searchSoldUrl,
+    ebayActiveUrl: searchActiveUrl,
     source: 'eBay Completed & Sold Search Link',
   };
 }
@@ -420,7 +458,7 @@ export async function resolveBanknoteValuation(input: ValuationQueryInput): Prom
   const { numistaPrice, sources } = await fetchNumistaValuation(input);
 
   // 2. Real eBay sold record (or clean search link if no API key is linked)
-  const { ebayLastSoldPrice, ebaySoldUrl, source: ebaySource, soldDate } = await fetchEBaySoldValuation(input);
+  const { ebayLastSoldPrice, ebaySoldUrl, ebayActiveUrl, source: ebaySource, soldDate } = await fetchEBaySoldValuation(input);
 
   // 3. PMG price guide anchor
   const { pmgPrice, source: pmgSource } = fetchPMGGuideValuation(input, numistaPrice);
@@ -475,6 +513,7 @@ export async function resolveBanknoteValuation(input: ValuationQueryInput): Prom
     ebayLastSold: ebayLastSoldPrice !== null ? formatUSD(ebayLastSoldPrice * specialMultiplier) : undefined,
     ebaySoldDate: soldDate || undefined,
     ebaySoldUrl,
+    ebayActiveUrl,
     collectorMarketValue: formatUSD(finalMarketValue),
     faceValue: formatUSD(faceValUSD),
     valuationConfidence: input.pickNumber ? 'high' : 'medium',

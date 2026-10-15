@@ -526,9 +526,20 @@ function SpecimenDetailModal({
                     {ebayVal && ebayVal !== '—' ? (
                       ebayVal
                     ) : ebayUrl ? (
-                      <a href={ebayUrl} target="_blank" rel="noreferrer" className="text-blue-400 underline font-sans text-[11px]">
-                        Check Sold ↗
-                      </a>
+                      <div className="flex items-center gap-1 font-sans text-[11px]">
+                        <a href={ebayUrl} target="_blank" rel="noreferrer" className="text-blue-400 underline">
+                          Sold ↗
+                        </a>
+                        <span className="text-slate-500">•</span>
+                        <a
+                          href={valObj.ebayActiveUrl || ebayUrl.replace('&LH_Sold=1&LH_Complete=1', '')}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-400 underline"
+                        >
+                          Active ↗
+                        </a>
+                      </div>
                     ) : (
                       '—'
                     )}

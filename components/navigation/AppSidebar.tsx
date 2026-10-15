@@ -16,7 +16,8 @@ import {
   Box, 
   PanelLeftClose,
   PanelLeftOpen,
-  Database
+  Database,
+  Activity
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { AnimatedThemeToggler } from '@/registry/magicui/animated-theme-toggler';
@@ -42,8 +43,9 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     name: 'Countries',
-    href: '/banknotes?view=countries',
+    href: '/countries',
     icon: Globe,
+    badge: 'Soon',
   },
   {
     name: 'New Entries',
@@ -52,28 +54,37 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     name: 'Duplicates',
-    href: '/banknotes?view=duplicates',
+    href: '/duplicates',
     icon: Copy,
+    badge: 'Soon',
   },
   {
     name: 'Valuable / Special',
-    href: '/banknotes?view=valuable',
+    href: '/valuable',
     icon: Star,
+    badge: 'Soon',
   },
   {
     name: 'Missing Information',
-    href: '/banknotes?view=missing',
+    href: '/missing-info',
     icon: AlertCircle,
+    badge: 'Soon',
   },
   {
     name: 'Recently Added',
-    href: '/banknotes?view=recent',
+    href: '/recently-added',
     icon: Clock,
+    badge: 'Soon',
   },
   {
     name: 'Reports',
     href: '/analytics',
     icon: BarChart2,
+  },
+  {
+    name: 'Processes',
+    href: '/processes',
+    icon: Activity,
   },
 ];
 
@@ -108,7 +119,10 @@ export function AppSidebar({
     if (href === '/') {
       return pathname === '/' || pathname === '/dashboard';
     }
-    return pathname?.startsWith(href) || (href === '/banknotes' && pathname === '/collection-list');
+    if (href === '/banknotes') {
+      return pathname === '/banknotes' || pathname?.startsWith('/banknotes/') || pathname === '/collection-list';
+    }
+    return pathname === href || pathname?.startsWith(href + '/');
   };
 
   return (

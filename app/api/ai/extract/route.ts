@@ -56,8 +56,13 @@ export async function POST(request: NextRequest) {
     const frontBase64 = Buffer.from(frontBuffer).toString('base64');
     const backBase64 = Buffer.from(backBuffer).toString('base64');
 
-    // Call Gemini Vision API
-    const extractedData = await extractBanknoteDetails(frontBase64, backBase64);
+    // Call Gemini Vision API with detected MIME types (supports WebP, PNG, JPEG, etc.)
+    const extractedData = await extractBanknoteDetails(
+      frontBase64,
+      backBase64,
+      frontImage.type,
+      backImage.type
+    );
 
     // Validate with Zod schema
     const validatedData = AIExtractionSchema.parse(extractedData);

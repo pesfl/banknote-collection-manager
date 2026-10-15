@@ -12,9 +12,10 @@ function getGeminiClient(): GoogleGenerativeAI {
 }
 
 const SUPPORTED_MODELS = [
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-flash-lite-latest',
   'gemini-3.8-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
   'gemini-flash-latest',
 ];
 
@@ -34,6 +35,19 @@ function parseGrade(g?: any): 'UNC' | 'AU' | 'XF' | 'VF' | 'F' | 'VG' | 'G' | 'U
   if (upper.includes('VG') || upper.includes('VERY GOOD')) return 'VG';
   if (upper.includes('F') || upper.includes('FINE')) return 'F';
   if (upper.includes('G') || upper.includes('GOOD')) return 'G';
+
+  // Support PMG/PCGS 70-point numerical grading scale
+  const num = parseInt(upper.replace(/\D/g, ''), 10);
+  if (!isNaN(num)) {
+    if (num >= 60) return 'UNC';
+    if (num >= 50) return 'AU';
+    if (num >= 40) return 'XF';
+    if (num >= 20) return 'VF';
+    if (num >= 12) return 'F';
+    if (num >= 8) return 'VG';
+    if (num >= 4) return 'G';
+  }
+
   return 'Unknown';
 }
 
@@ -52,46 +66,87 @@ function parseFancySerial(f?: any): 'Solid' | 'Radar' | 'Ladder' | 'Binary' | 'R
   return 'Unknown';
 }
 
+function detectImageMimeType(base64: string, explicitType?: string): string {
+  if (explicitType && explicitType.startsWith('image/')) {
+    // Standardize jpeg
+    if (explicitType === 'image/jpg') return 'image/jpeg';
+    return explicitType;
+  }
+  if (base64.startsWith('/9j/')) return 'image/jpeg';
+  if (base64.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (base64.startsWith('UklGR')) return 'image/webp';
+  if (base64.startsWith('R0lGOD')) return 'image/gif';
+  return 'image/jpeg';
+}
+
 /**
  * Extract banknote details from front and back images using Gemini Vision
  */
 export async function extractBanknoteDetails(
   frontImageBase64: string,
-  backImageBase64: string
+  backImageBase64: string,
+  frontMimeType?: string,
+  backMimeType?: string
 ): Promise<AIExtraction> {
+  const frontMime = detectImageMimeType(frontImageBase64, frontMimeType);
+  const backMime = detectImageMimeType(backImageBase64, backMimeType);
   try {
     const client = getGeminiClient();
 
-    const extractionPrompt = `You are a numismatic expert. Analyze these banknote images (front and back) and extract the following information in JSON format.
+    const extractionPrompt = `You are an elite numismatic specialist and professional banknote grader. Analyze these banknote images (front and back) and extract structured numismatic data in JSON format.
 
-Return ONLY a valid JSON object (no markdown, no explanation) with these fields:
+=== PRIORITY RULE #1: CERTIFIED GRADING SLABS & ENVELOPES (PMG, PCGS, LEGACY, CGC) ===
+- FIRST, carefully check if the note is encased in a certified grading holder, plastic slab, or sleeve with a printed grading label banner (such as PMG - Paper Money Guaranty green banner, PCGS Banknote, Legacy Currency, etc.).
+- IF A GRADING SLAB/LABEL IS VISIBLE, THE INFORMATION PRINTED ON THE LABEL IS OFFICIAL GROUND TRUTH:
+  1. "countryOfOrigin": Take the exact country printed on the grader's label (e.g., if the PMG label says "Philippines", the country is "Philippines", NOT "United States").
+  2. "denomination" & "currency": Take the exact face value and currency from the label (e.g., "100 Piso", "500 Pesos").
+  3. "pickNumber": Take the catalog reference printed on the label (e.g., "P-192*", "Pick# 182a", "P-88").
+  4. "conditionGrade": Convert the certified grade number on the label to standard tier:
+     - 65 to 70 (Gem/Superb UNC) -> "UNC"
+     - 60 to 64 (Uncirculated) -> "UNC"
+     - 50 to 58 (About Uncirculated) -> "AU"
+     - 40 to 45 (Extremely Fine) -> "XF"
+     - 20 to 35 (Very Fine) -> "VF"
+     - 12 to 15 (Fine) -> "F"
+     - 8 to 10 (Very Good) -> "VG"
+  5. "isReplacementNote": Check if the label contains a star symbol ("★" or "*") or the words "Star Note", "Replacement", or if the serial number begins/ends with a star ("*"). If so, set "isReplacementNote": true.
+  6. "notes": Include the certified grading details, e.g., "PMG Certified Gem Unc 66 EPQ - Star Replacement Note".
+
+=== PRIORITY RULE #2: PHILIPPINES & FORMER US-ADMINISTERED ISSUES ===
+- Historical Philippine banknotes (Commonwealth Treasury Certificates, 1944 Victory notes, Central Bank of the Philippines issues) were engraved and manufactured by the US Bureau of Engraving and Printing (BEP) in Washington D.C.
+- Even if they feature American guilloche scrollwork, George Washington portraits, or text saying "United States of America - Philippine Islands" or "Treasury Certificate by Authority of an Act of Congress", THE COUNTRY IS "Philippines" AND THE CURRENCY IS "Peso" (or "Piso"), NEVER "United States" or "US Dollar".
+
+=== PRIORITY RULE #3: STAR & REPLACEMENT NOTES ===
+- Examine the serial number and label closely for a star symbol ("*", "★") at the beginning or end of the serial number (e.g., "*01234567*", "A1234567*"). A star indicates a replacement note issued to replace a damaged print sheet. If detected, set "isReplacementNote": true.
+
+Return ONLY a valid JSON object (no markdown, no code fences, no extra text) with these fields:
 {
-  "countryOfOrigin": "string - country name",
-  "denomination": "string - numerical denomination with currency symbol",
-  "currency": "string - currency name",
-  "pickNumber": "string - Pick catalog number if visible (e.g., P-88, P-211c)",
-  "issueYear": "string - year of issue from note",
+  "countryOfOrigin": "string - issuing country name (e.g., 'Philippines', 'Canada', 'India', 'United States')",
+  "denomination": "string - numerical denomination with currency name/symbol (e.g., '100 Piso', '$10', '₹50')",
+  "currency": "string - currency name (e.g., 'Philippine Peso', 'Canadian Dollar', 'Indian Rupee')",
+  "pickNumber": "string - Pick catalog number if visible or on label (e.g., 'P-192*', 'P-113', 'P-24')",
+  "issueYear": "string - year of issue from note or label (e.g., '1944', '2018')",
   "seriesDate": "string - series date if different from issue year",
-  "fullSerialNumber": "string - complete serial number as printed",
-  "serialPrefix": "string - prefix letters/numbers",
+  "fullSerialNumber": "string - complete serial number as printed including any star (*)",
+  "serialPrefix": "string - prefix letters/symbols",
   "serialNumeric": "string - numeric portion",
-  "serialSuffix": "string - suffix letters",
+  "serialSuffix": "string - suffix letters/symbols (e.g. '*' if star note)",
   "signature1Name": "string - first signature name if visible",
   "signature1Title": "string - first signature title/role",
   "signature2Name": "string - second signature name if visible",
   "signature2Title": "string - second signature title/role",
   "watermarks": "string - visible watermarks description",
-  "securityFeatures": "string - security features (security thread, hologram, etc.)",
-  "conditionGrade": "string - condition (UNC, AU, XF, VF, F, VG, G, Unknown)",
-  "machineEstimatedGrade": "string - machine learning estimated grade",
+  "securityFeatures": "string - security features (thread, hologram, color-shifting ink, etc.)",
+  "conditionGrade": "string - condition tier: UNC, AU, XF, VF, F, VG, G, Unknown",
+  "machineEstimatedGrade": "string - estimated grade tier",
   "fancySerialType": "string - fancy serial classification (Solid, Radar, Ladder, Binary, Repeater, LowNumber, HighNumber, Sequential, None, Unknown)",
-  "isReplacementNote": "boolean - true if replacement/star note",
-  "errorType": "string - if printing error present (e.g., misalignment, overprint)",
-  "defectsAndAnomalies": "string - folds, stains, tears, ink overspray, miscuts, etc.",
-  "notes": "string - any other collector-relevant details"
+  "isReplacementNote": "boolean - true if star or replacement note, false otherwise",
+  "errorType": "string - if printing error present (e.g., misalignment, overprint), else null",
+  "defectsAndAnomalies": "string - folds, stains, tears, pinholes, or holder certification details",
+  "notes": "string - grader certification details (e.g. 'PMG 66 EPQ Gem Uncirculated') and historical context"
 }
 
-If any field cannot be determined, use null. Be accurate and conservative - only include information you can clearly see.`;
+If any field cannot be determined, use null. Be accurate and conservative.`;
 
     let responseText = '';
     let lastError: any = null;
@@ -102,13 +157,13 @@ If any field cannot be determined, use null. Be accurate and conservative - only
         const response = await model.generateContent([
           {
             inlineData: {
-              mimeType: 'image/jpeg',
+              mimeType: frontMime,
               data: frontImageBase64,
             },
           },
           {
             inlineData: {
-              mimeType: 'image/jpeg',
+              mimeType: backMime,
               data: backImageBase64,
             },
           },

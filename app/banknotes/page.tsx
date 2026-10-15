@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import BanknoteListView from '@/components/banknote/BanknoteListView';
 import type { Banknote } from '@/types';
 import { getAllSpecimens } from '@/lib/offline/idb';
+import ComingSoonFeature from '@/components/common/ComingSoonFeature';
 
 const MOCK_BANKNOTES: Banknote[] = [
   {
@@ -168,6 +169,14 @@ const MOCK_BANKNOTES: Banknote[] = [
 function BanknotesInventoryContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
+  const view = searchParams.get('view');
+
+  if (view === 'countries') return <ComingSoonFeature type="countries" />;
+  if (view === 'duplicates') return <ComingSoonFeature type="duplicates" />;
+  if (view === 'valuable') return <ComingSoonFeature type="valuable" />;
+  if (view === 'missing') return <ComingSoonFeature type="missing" />;
+  if (view === 'recent' || view === 'recently-added') return <ComingSoonFeature type="recently-added" />;
+
   const [banknotes, setBanknotes] = useState<Banknote[]>(MOCK_BANKNOTES);
   const [sortBy, setSortBy] = useState<'recent' | 'country' | 'value'>('recent');
 

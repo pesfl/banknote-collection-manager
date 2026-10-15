@@ -1,12 +1,21 @@
 'use client';
 
 import { getSpecimen, updateSpecimen, getAllSpecimens } from '@/lib/offline/idb';
-import type { LocalSpecimen, ExtractionNotification, AIExtraction, BanknoteValuation } from '@/types';
+import type { 
+  LocalSpecimen, 
+  ExtractionNotification, 
+  AIExtraction, 
+  BanknoteValuation,
+  ActiveJobInfo,
+  ProcessLogItem,
+  QueueManagerStatus 
+} from '@/types';
 import { resolveBanknoteValuation } from '@/lib/valuation/valuation-service';
 
 export function getCountryFlag(countryName?: string): string {
   if (!countryName) return '🌐';
   const c = countryName.toLowerCase();
+  if (c.includes('philippine') || c.includes('filipino')) return '🇵🇭';
   if (c.includes('canada')) return '🇨🇦';
   if (c.includes('brazil') || c.includes('brasil')) return '🇧🇷';
   if (c.includes('argentina')) return '🇦🇷';
@@ -50,11 +59,128 @@ function notifyListeners(notification: ExtractionNotification) {
   });
 }
 
-// Queue of specimen IDs awaiting extraction
+// ============================================================================
+// LIVE PROCESS MONITORING & QUEUE STATE
+// ============================================================================
+
 const extractionQueue: string[] = [];
 let isProcessingQueue = false;
+let isQueuePaused = false;
 let processingStartedAt = 0;
 let extractionInterval: NodeJS.Timeout | null = null;
+let activeJobInfo: ActiveJobInfo | null = null;
+
+const queueStats = {
+  totalCompleted: 0,
+  totalFailed: 0,
+  lastCompletedAt: undefined as Date | undefined,
+};
+
+const processLogs: ProcessLogItem[] = [];
+type QueueStatusListener = (status: QueueManagerStatus) => void;
+const queueStatusListeners = new Set<QueueStatusListener>();
+
+export function addProcessLog(
+  message: string,
+  level: 'info' | 'success' | 'warn' | 'error' = 'info',
+  meta?: { specimenId?: string; country?: string; denomination?: string }
+) {
+  const log: ProcessLogItem = {
+    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    timestamp: new Date(),
+    level,
+    message,
+    specimenId: meta?.specimenId,
+    country: meta?.country,
+    denomination: meta?.denomination,
+  };
+  processLogs.unshift(log);
+  if (processLogs.length > 80) processLogs.pop(); // keep last 80 logs
+  broadcastQueueStatus();
+}
+
+export function getQueueStatus(): QueueManagerStatus {
+  return {
+    isProcessing: isProcessingQueue,
+    isPaused: isQueuePaused,
+    activeJob: activeJobInfo,
+    queue: [...extractionQueue],
+    queueLength: extractionQueue.length,
+    stats: { ...queueStats },
+    recentLogs: [...processLogs],
+  };
+}
+
+export function subscribeToQueueStatus(listener: QueueStatusListener): () => void {
+  queueStatusListeners.add(listener);
+  try {
+    listener(getQueueStatus());
+  } catch {}
+  return () => {
+    queueStatusListeners.delete(listener);
+  };
+}
+
+function broadcastQueueStatus() {
+  const status = getQueueStatus();
+  queueStatusListeners.forEach((listener) => {
+    try {
+      listener(status);
+    } catch (e) {
+      console.error('Error in queue status listener:', e);
+    }
+  });
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('banknote-queue-status-change', {
+        detail: status,
+      })
+    );
+  }
+}
+
+export function pauseBackgroundQueue() {
+  isQueuePaused = true;
+  addProcessLog('Background queue paused by user', 'warn');
+  broadcastQueueStatus();
+}
+
+export function resumeBackgroundQueue() {
+  isQueuePaused = false;
+  addProcessLog('Background queue resumed', 'info');
+  broadcastQueueStatus();
+  processNextInQueue();
+}
+
+export function clearProcessLogs() {
+  processLogs.length = 0;
+  broadcastQueueStatus();
+}
+
+export async function retryFailedSpecimens(): Promise<number> {
+  const all = await getAllSpecimens();
+  let retried = 0;
+  for (const s of all) {
+    if (s.extractionStatus === 'failed') {
+      await updateSpecimen({
+        ...s,
+        extractionStatus: 'pending',
+        extractionError: undefined,
+      });
+      if (!extractionQueue.includes(s.id)) {
+        extractionQueue.push(s.id);
+        retried++;
+      }
+    }
+  }
+  if (retried > 0) {
+    addProcessLog(`Re-enqueued ${retried} failed specimen(s) for retry`, 'info');
+    broadcastQueueStatus();
+    processNextInQueue();
+  }
+  return retried;
+}
 
 /**
  * Enqueue a specimen ID for background AI identification.
@@ -63,7 +189,9 @@ let extractionInterval: NodeJS.Timeout | null = null;
 export function enqueueSpecimenForExtraction(specimenId: string) {
   if (!extractionQueue.includes(specimenId)) {
     extractionQueue.push(specimenId);
+    addProcessLog(`Enqueued specimen ${specimenId} for background processing`, 'info', { specimenId });
   }
+  broadcastQueueStatus();
   processNextInQueue();
 }
 
@@ -101,18 +229,31 @@ export async function syncPendingSpecimensFromDB() {
     let queuedCount = 0;
 
     for (const specimen of all) {
-      const needsValuation = isSpecimenMissingValuation(specimen);
       const ex = (specimen.extractedData || {}) as any;
-      const needsExtraction = !ex || !ex.countryOfOrigin;
+      const isCorrupted =
+        ex.countryOfOrigin === 'Canada' &&
+        ex.denomination === '10 Dollars' &&
+        ex.currency === 'CAD' &&
+        !ex.pickNumber &&
+        Boolean(specimen.frontImageBlob);
 
-      if ((needsValuation || needsExtraction) && !extractionQueue.includes(specimen.id)) {
+      const needsExtraction =
+        specimen.extractionStatus !== 'completed' ||
+        !ex.countryOfOrigin ||
+        ex.countryOfOrigin === 'Unknown' ||
+        isCorrupted;
+
+      const needsValuation = isSpecimenMissingValuation(specimen);
+
+      if ((needsExtraction || needsValuation) && !extractionQueue.includes(specimen.id)) {
         extractionQueue.push(specimen.id);
         queuedCount++;
       }
     }
 
     if (queuedCount > 0) {
-      console.log(`[Background Worker] Enqueued ${queuedCount} specimen(s) for valuation check.`);
+      addProcessLog(`Database scan enqueued ${queuedCount} pending specimen(s)`, 'info');
+      broadcastQueueStatus();
     }
 
     processNextInQueue();
@@ -122,8 +263,13 @@ export async function syncPendingSpecimensFromDB() {
 }
 
 async function processNextInQueue() {
+  if (isQueuePaused) return;
   if (isProcessingQueue) return;
-  if (extractionQueue.length === 0) return;
+  if (extractionQueue.length === 0) {
+    activeJobInfo = null;
+    broadcastQueueStatus();
+    return;
+  }
 
   isProcessingQueue = true;
   processingStartedAt = Date.now();
@@ -131,6 +277,8 @@ async function processNextInQueue() {
 
   if (!specimenId) {
     isProcessingQueue = false;
+    activeJobInfo = null;
+    broadcastQueueStatus();
     return;
   }
 
@@ -138,22 +286,270 @@ async function processNextInQueue() {
     const specimen = await getSpecimen(specimenId);
     if (!specimen) {
       isProcessingQueue = false;
+      activeJobInfo = null;
       processNextInQueue();
       return;
     }
 
     const ex = (specimen.extractedData || {}) as any;
-    const missingValuation = isSpecimenMissingValuation(specimen);
 
-    // Case 1: Specimen has attributes or is missing valuation:
-    // Call server valuation endpoint (exact same API as manual Refresh Live button)
+    // Detect if specimen was corrupted by previous hardcoded Canada fallback bug
+    const isCorruptedByCanadaBug =
+      ex.countryOfOrigin === 'Canada' &&
+      ex.denomination === '10 Dollars' &&
+      ex.currency === 'CAD' &&
+      !ex.pickNumber &&
+      Boolean(specimen.frontImageBlob);
+
+    // Case 1: Specimen needs visual extraction from camera photos using Gemini Vision
+    const needsVisualExtraction =
+      Boolean(specimen.frontImageBlob) &&
+      (specimen.extractionStatus !== 'completed' ||
+        !ex.countryOfOrigin ||
+        ex.countryOfOrigin === 'Unknown' ||
+        ex.countryOfOrigin === 'World Banknote' ||
+        isCorruptedByCanadaBug);
+
+    if (needsVisualExtraction) {
+      activeJobInfo = {
+        specimenId: specimen.id,
+        step: 'extracting',
+        stepDescription: 'Running Gemini Vision AI (Gemini 3.5 Flash)...',
+        startedAt: Date.now(),
+      };
+      addProcessLog(`Visual AI extraction started for ${specimen.id}`, 'info', { specimenId: specimen.id });
+      broadcastQueueStatus();
+
+      await updateSpecimen({
+        ...specimen,
+        extractionStatus: 'extracting',
+      });
+
+      let extraction: AIExtraction | null = null;
+      let extractErrorMsg: string | undefined = undefined;
+
+      try {
+        const formData = new FormData();
+        const frontName = specimen.frontImageBlob.type?.includes('webp')
+          ? 'front.webp'
+          : specimen.frontImageBlob.type?.includes('png')
+          ? 'front.png'
+          : 'front.jpg';
+        const backBlob = specimen.backImageBlob || specimen.frontImageBlob;
+        const backName = backBlob.type?.includes('webp')
+          ? 'back.webp'
+          : backBlob.type?.includes('png')
+          ? 'back.png'
+          : 'back.jpg';
+
+        formData.append('frontImage', specimen.frontImageBlob, frontName);
+        formData.append('backImage', backBlob, backName);
+
+        const response = await fetch('/api/ai/extract', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            extraction = result.data;
+          } else {
+            extractErrorMsg = result?.error || 'AI extraction failed';
+          }
+        } else {
+          const errJson = await response.json().catch(() => ({}));
+          extractErrorMsg = errJson?.error || `AI extraction HTTP error ${response.status}`;
+        }
+      } catch (extractErr: any) {
+        extractErrorMsg = extractErr?.message || 'AI visual extraction network error';
+        console.warn(`[Background Queue] AI visual extraction skipped/failed for ${specimenId}:`, extractErr);
+      }
+
+      if (!extraction) {
+        queueStats.totalFailed++;
+        addProcessLog(`Visual AI extraction failed for ${specimenId}: ${extractErrorMsg}`, 'error', { specimenId: specimen.id });
+        await updateSpecimen({
+          ...specimen,
+          extractionStatus: 'failed',
+          extractionError: extractErrorMsg || 'Visual identification failed',
+        });
+        activeJobInfo = null;
+        isProcessingQueue = false;
+        broadcastQueueStatus();
+        setTimeout(() => processNextInQueue(), 250);
+        return;
+      }
+
+      activeJobInfo = {
+        specimenId: specimen.id,
+        step: 'evaluating',
+        stepDescription: `Resolving valuation for ${extraction.countryOfOrigin} ${extraction.denomination}...`,
+        startedAt: Date.now(),
+        country: extraction.countryOfOrigin,
+        denomination: extraction.denomination,
+      };
+      addProcessLog(
+        `Identified: ${extraction.countryOfOrigin} ${extraction.denomination} (${extraction.conditionGrade || 'UNC'})`,
+        'success',
+        { specimenId: specimen.id, country: extraction.countryOfOrigin, denomination: extraction.denomination }
+      );
+      broadcastQueueStatus();
+
+      // Resolve valuation with the true extracted attributes
+      let valuation: BanknoteValuation | undefined = undefined;
+      const valPayload = {
+        countryOfOrigin: extraction.countryOfOrigin,
+        denomination: extraction.denomination,
+        currency: extraction.currency,
+        pickNumber: extraction.pickNumber,
+        issueYear: extraction.issueYear,
+        conditionGrade: extraction.conditionGrade,
+        isReplacementNote: extraction.isReplacementNote,
+        fancySerialType: extraction.fancySerialType,
+        serialNumeric: extraction.serialNumeric,
+      };
+
+      try {
+        const valRes = await fetch(`/api/valuation/${specimen.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(valPayload),
+        });
+        if (valRes.ok) {
+          const valJson = await valRes.json();
+          valuation = valJson?.data || valJson;
+        }
+      } catch (valErr) {
+        console.warn('[Background Worker] Server valuation call failed, falling back:', valErr);
+      }
+
+      if (!valuation || !valuation.collectorMarketValue) {
+        valuation = await resolveBanknoteValuation(valPayload);
+      }
+
+      const updatedSpecimen: LocalSpecimen = {
+        ...specimen,
+        extractionStatus: 'completed',
+        extractionError: undefined,
+        extractedData: {
+          ...(specimen.extractedData || {}),
+          ...extraction,
+          valuation,
+          collectorMarketValue: valuation?.collectorMarketValue || '$1.50',
+          numistaValue: valuation?.numistaValue || '$1.50',
+          pmgValue: valuation?.pmgValue || '$1.80',
+          ebayLastSold: valuation?.ebayLastSold,
+          ebaySoldUrl: valuation?.ebaySoldUrl,
+          country: extraction.countryOfOrigin,
+          countryOfOrigin: extraction.countryOfOrigin,
+          denomination: extraction.denomination,
+          pickNumber: extraction.pickNumber || undefined,
+          fullSerialNumber: extraction.fullSerialNumber || undefined,
+          issueYear: extraction.issueYear || undefined,
+          seriesDate: extraction.seriesDate || undefined,
+          conditionGrade: extraction.conditionGrade || undefined,
+          machineEstimatedGrade: extraction.machineEstimatedGrade || undefined,
+          currency: extraction.currency || undefined,
+          fancySerialType: extraction.fancySerialType || undefined,
+          isReplacementNote: extraction.isReplacementNote,
+          signature1Name: extraction.signature1Name || undefined,
+          signature1Title: extraction.signature1Title || undefined,
+          signature2Name: extraction.signature2Name || undefined,
+          signature2Title: extraction.signature2Title || undefined,
+          watermarks: extraction.watermarks || undefined,
+          securityFeatures: extraction.securityFeatures || undefined,
+          notes: extraction.notes || undefined,
+          defectsAndAnomalies: extraction.defectsAndAnomalies || undefined,
+        },
+      };
+
+      await updateSpecimen(updatedSpecimen);
+
+      if (specimen.serverId) {
+        try {
+          await fetch(`/api/banknotes/${specimen.serverId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...extraction,
+              collectorMarketValue: valuation?.collectorMarketValue,
+              numistaPmgValue: valuation?.numistaValue,
+            }),
+          });
+        } catch (patchErr) {
+          console.warn('Server patch skipped for background extraction:', patchErr);
+        }
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('banknote-specimen-updated', {
+            detail: { specimenId: specimen.id, valuation, extraction },
+          })
+        );
+      }
+
+      let thumbUrl: string | undefined;
+      try {
+        thumbUrl = URL.createObjectURL(specimen.frontImageBlob);
+      } catch {}
+
+      const countryName = extraction.countryOfOrigin || 'Banknote';
+      const flag = getCountryFlag(countryName);
+
+      notifyListeners({
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        specimenId: specimen.id,
+        country: countryName,
+        countryFlag: flag,
+        denomination: extraction.denomination || 'Specimen',
+        pickNumber: extraction.pickNumber || undefined,
+        serialNumber: extraction.fullSerialNumber || extraction.serialNumeric || undefined,
+        conditionGrade: extraction.conditionGrade || undefined,
+        issueYear: extraction.issueYear || extraction.seriesDate || undefined,
+        valuation: valuation?.collectorMarketValue,
+        thumbnailUrl: thumbUrl,
+        status: 'completed',
+        message: valuation?.collectorMarketValue
+          ? `Valuation: ${valuation.collectorMarketValue}`
+          : 'AI Identification Complete',
+        timestamp: new Date(),
+      });
+
+      queueStats.totalCompleted++;
+      queueStats.lastCompletedAt = new Date();
+      addProcessLog(
+        `Completed: ${extraction.countryOfOrigin} ${extraction.denomination} — ${valuation?.collectorMarketValue || '$1.50'}`,
+        'success',
+        { specimenId: specimen.id, country: extraction.countryOfOrigin, denomination: extraction.denomination }
+      );
+
+      activeJobInfo = null;
+      isProcessingQueue = false;
+      broadcastQueueStatus();
+      setTimeout(() => processNextInQueue(), 250);
+      return;
+    }
+
+    // Case 2: Specimen has ALREADY been visually extracted, but needs valuation calculation
+    const missingValuation = isSpecimenMissingValuation(specimen);
     if (missingValuation) {
-      console.log(`[Background Worker] Auto-evaluating specimen ${specimen.id}...`);
+      activeJobInfo = {
+        specimenId: specimen.id,
+        step: 'evaluating',
+        stepDescription: `Evaluating existing note ${ex.countryOfOrigin || 'Unknown'} ${ex.denomination || ''}...`,
+        startedAt: Date.now(),
+        country: ex.countryOfOrigin,
+        denomination: ex.denomination,
+      };
+      addProcessLog(`Valuation query started for ${specimen.id}`, 'info', { specimenId: specimen.id });
+      broadcastQueueStatus();
 
       const valPayload = {
-        countryOfOrigin: ex.countryOfOrigin || ex.country || 'Canada',
-        denomination: ex.denomination || '10 Dollars',
-        currency: ex.currency || 'CAD',
+        countryOfOrigin: ex.countryOfOrigin || ex.country || 'Unknown',
+        denomination: ex.denomination || 'Unknown',
+        currency: ex.currency || 'USD',
         pickNumber: ex.pickNumber,
         issueYear: ex.issueYear,
         conditionGrade: ex.conditionGrade || 'UNC',
@@ -163,8 +559,6 @@ async function processNextInQueue() {
       };
 
       let valData: any = null;
-
-      // 1. Call server API (has Numista & eBay API credentials)
       try {
         const apiRes = await fetch(`/api/valuation/${specimen.id}`, {
           method: 'POST',
@@ -179,14 +573,10 @@ async function processNextInQueue() {
         console.warn('[Background Worker] Server valuation API call error, using local fallback:', apiErr);
       }
 
-      // 2. Fallback to client-side valuation engine if server is unreachable
       if (!valData || !valData.collectorMarketValue) {
         valData = await resolveBanknoteValuation(valPayload);
       }
 
-      console.log(`[Background Worker] Valuation resolved for ${specimen.id}:`, valData.collectorMarketValue);
-
-      // Save complete valuation breakdown to IndexedDB
       await updateSpecimen({
         ...specimen,
         extractionStatus: 'completed',
@@ -202,7 +592,6 @@ async function processNextInQueue() {
         },
       });
 
-      // Broadcast update event so all open pages and modals refresh live
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('banknote-specimen-updated', {
@@ -211,185 +600,28 @@ async function processNextInQueue() {
         );
       }
 
+      queueStats.totalCompleted++;
+      queueStats.lastCompletedAt = new Date();
+      addProcessLog(`Valuation resolved for ${specimen.id}: ${valData?.collectorMarketValue || '$1.50'}`, 'success', {
+        specimenId: specimen.id,
+        country: ex.countryOfOrigin,
+        denomination: ex.denomination,
+      });
+
+      activeJobInfo = null;
       isProcessingQueue = false;
+      broadcastQueueStatus();
       setTimeout(() => processNextInQueue(), 250);
       return;
     }
-
-    // Case 2: Needs full AI visual extraction from camera images
-    await updateSpecimen({
-      ...specimen,
-      extractionStatus: 'extracting',
-    });
-
-    let extraction: AIExtraction | null = null;
-
-    try {
-      const formData = new FormData();
-      formData.append('frontImage', specimen.frontImageBlob, 'front.jpg');
-      formData.append('backImage', specimen.backImageBlob, 'back.jpg');
-
-      const response = await fetch('/api/ai/extract', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data) {
-          extraction = result.data;
-        }
-      }
-    } catch (extractErr) {
-      console.warn(`[Background Queue] AI visual extraction skipped/failed for ${specimenId}:`, extractErr);
-    }
-
-    // If Gemini Vision did not return data:
-    // Fall back to note metadata so the specimen is safely completed with a realistic valuation
-    if (!extraction) {
-      const userNote = specimen.notes || '';
-      extraction = {
-        countryOfOrigin: ex.countryOfOrigin || ex.country || 'World Banknote',
-        denomination: ex.denomination || '1 Specimen',
-        currency: ex.currency || 'Standard',
-        conditionGrade: ex.conditionGrade || 'UNC',
-        isReplacementNote: false,
-        fancySerialType: 'None',
-        notes: userNote || 'Specimen saved to collection',
-      };
-    }
-
-    // Resolve valuation
-    let valuation: BanknoteValuation | undefined = undefined;
-    try {
-      const valRes = await fetch(`/api/valuation/${specimen.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          countryOfOrigin: extraction.countryOfOrigin,
-          denomination: extraction.denomination,
-          currency: extraction.currency,
-          pickNumber: extraction.pickNumber,
-          issueYear: extraction.issueYear,
-          conditionGrade: extraction.conditionGrade,
-          isReplacementNote: extraction.isReplacementNote,
-          fancySerialType: extraction.fancySerialType,
-          serialNumeric: extraction.serialNumeric,
-        }),
-      });
-      if (valRes.ok) {
-        const valJson = await valRes.json();
-        valuation = valJson?.data || valJson;
-      }
-    } catch {}
-
-    if (!valuation || !valuation.collectorMarketValue) {
-      valuation = await resolveBanknoteValuation({
-        countryOfOrigin: extraction.countryOfOrigin,
-        denomination: extraction.denomination,
-        currency: extraction.currency,
-        pickNumber: extraction.pickNumber,
-        issueYear: extraction.issueYear,
-        conditionGrade: extraction.conditionGrade,
-        isReplacementNote: extraction.isReplacementNote,
-        fancySerialType: extraction.fancySerialType,
-        serialNumeric: extraction.serialNumeric,
-      });
-    }
-
-    // Merge into specimen in IndexedDB
-    const updatedSpecimen: LocalSpecimen = {
-      ...specimen,
-      extractionStatus: 'completed',
-      extractionError: undefined,
-      extractedData: {
-        ...(specimen.extractedData || {}),
-        ...extraction,
-        valuation,
-        collectorMarketValue: valuation?.collectorMarketValue || '$1.50',
-        numistaValue: valuation?.numistaValue || '$1.50',
-        pmgValue: valuation?.pmgValue || '$1.80',
-        ebayLastSold: valuation?.ebayLastSold,
-        ebaySoldUrl: valuation?.ebaySoldUrl,
-        country: extraction.countryOfOrigin || (specimen.extractedData as any)?.country,
-        countryOfOrigin: extraction.countryOfOrigin,
-        denomination: extraction.denomination,
-        pickNumber: extraction.pickNumber || undefined,
-        fullSerialNumber: extraction.fullSerialNumber || undefined,
-        issueYear: extraction.issueYear || undefined,
-        seriesDate: extraction.seriesDate || undefined,
-        conditionGrade: extraction.conditionGrade || undefined,
-        machineEstimatedGrade: extraction.machineEstimatedGrade || undefined,
-        currency: extraction.currency || undefined,
-        fancySerialType: extraction.fancySerialType || undefined,
-        isReplacementNote: extraction.isReplacementNote,
-        signature1Name: extraction.signature1Name || undefined,
-        signature1Title: extraction.signature1Title || undefined,
-        signature2Name: extraction.signature2Name || undefined,
-        signature2Title: extraction.signature2Title || undefined,
-        watermarks: extraction.watermarks || undefined,
-        securityFeatures: extraction.securityFeatures || undefined,
-        notes: extraction.notes || undefined,
-        defectsAndAnomalies: extraction.defectsAndAnomalies || undefined,
-      },
-    };
-
-    await updateSpecimen(updatedSpecimen);
-
-    if (specimen.serverId) {
-      try {
-        await fetch(`/api/banknotes/${specimen.serverId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...extraction,
-            collectorMarketValue: valuation?.collectorMarketValue,
-            numistaPmgValue: valuation?.numistaValue,
-          }),
-        });
-      } catch (patchErr) {
-        console.warn('Server patch skipped for background extraction:', patchErr);
-      }
-    }
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('banknote-specimen-updated', {
-          detail: { specimenId: specimen.id, extraction, valuation },
-        })
-      );
-    }
-
-    let thumbUrl: string | undefined;
-    try {
-      thumbUrl = URL.createObjectURL(specimen.frontImageBlob);
-    } catch {}
-
-    const countryName = extraction.countryOfOrigin || (specimen.extractedData as any)?.country || 'Banknote';
-    const flag = getCountryFlag(countryName);
-
-    notifyListeners({
-      id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-      specimenId: specimen.id,
-      country: countryName,
-      countryFlag: flag,
-      denomination: extraction.denomination || 'Specimen',
-      pickNumber: extraction.pickNumber || undefined,
-      serialNumber: extraction.fullSerialNumber || extraction.serialNumeric || undefined,
-      conditionGrade: extraction.conditionGrade || undefined,
-      issueYear: extraction.issueYear || extraction.seriesDate || undefined,
-      valuation: valuation?.collectorMarketValue,
-      thumbnailUrl: thumbUrl,
-      status: 'completed',
-      message: valuation?.collectorMarketValue
-        ? `Valuation: ${valuation.collectorMarketValue}`
-        : 'AI Identification Complete',
-      timestamp: new Date(),
-    });
   } catch (err: any) {
+    queueStats.totalFailed++;
+    addProcessLog(`Queue error processing ${specimenId}: ${err?.message || err}`, 'error', { specimenId });
     console.warn(`Background extraction failed for ${specimenId}:`, err);
   } finally {
+    activeJobInfo = null;
     isProcessingQueue = false;
+    broadcastQueueStatus();
     setTimeout(() => {
       processNextInQueue();
     }, 300);

@@ -271,6 +271,7 @@ export const BanknoteValuationSchema = z.object({
   ebayLastSold: z.string().optional(),
   ebaySoldDate: z.string().optional(),
   ebaySoldUrl: z.string().optional(),
+  ebayActiveUrl: z.string().optional(),
   collectorMarketValue: z.string(),
   faceValue: z.string().optional(),
   valuationConfidence: z.enum(['low', 'medium', 'high', 'exceptional']).default('medium'),
@@ -344,3 +345,40 @@ export type APIResponse<T = any> = {
   error?: string;
   message?: string;
 };
+
+// ============================================================================
+// BACKGROUND PROCESS & QUEUE MONITOR TYPES
+// ============================================================================
+
+export interface ProcessLogItem {
+  id: string;
+  timestamp: Date;
+  level: 'info' | 'success' | 'warn' | 'error';
+  message: string;
+  specimenId?: string;
+  country?: string;
+  denomination?: string;
+}
+
+export interface ActiveJobInfo {
+  specimenId: string;
+  step: 'extracting' | 'evaluating' | 'saving' | 'syncing';
+  stepDescription: string;
+  startedAt: number;
+  country?: string;
+  denomination?: string;
+}
+
+export interface QueueManagerStatus {
+  isProcessing: boolean;
+  isPaused: boolean;
+  activeJob: ActiveJobInfo | null;
+  queue: string[];
+  queueLength: number;
+  stats: {
+    totalCompleted: number;
+    totalFailed: number;
+    lastCompletedAt?: Date;
+  };
+  recentLogs: ProcessLogItem[];
+}
