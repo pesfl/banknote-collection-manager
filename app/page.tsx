@@ -358,7 +358,84 @@ export default function DashboardPage() {
               serialNumber: ex.fullSerialNumber || ex.serialNumeric || 'Local IDB',
             };
           });
+
+          const localIds = new Set(local.map((l) => l.id));
+
+          // Merge cloud banknotes from Neon PostgreSQL if available
+          try {
+            const cloudRes = await fetch('/api/banknotes').catch(() => null);
+            if (cloudRes && cloudRes.ok) {
+              const cloudData = await cloudRes.json();
+              if (cloudData?.banknotes && Array.isArray(cloudData.banknotes)) {
+                for (const cb of cloudData.banknotes) {
+                  if (!localIds.has(cb.id)) {
+                    localIds.add(cb.id);
+                    const countryName = cb.countryOfOrigin || 'Unknown';
+                    mapped.push({
+                      id: cb.id,
+                      country: countryName,
+                      countryFlag: getCountryFlag(countryName),
+                      denomination: cb.denomination && cb.denomination !== 'Unknown' ? cb.denomination : '—',
+                      year: cb.issueYear || cb.seriesDate || '—',
+                      pickNumber: cb.pickNumber || 'P-Pending',
+                      condition: cb.conditionGrade || 'UNC',
+                      qty: 1,
+                      value: cb.collectorMarketValue || 'Valuation Pending',
+                      pmgValue: cb.numistaPmgValue ? cb.numistaPmgValue.split('/')?.[0]?.trim() : undefined,
+                      numistaValue: cb.numistaPmgValue ? cb.numistaPmgValue.split('/')?.[1]?.trim() : undefined,
+                      ebayLastSold: cb.extractionData?.ebayLastSold,
+                      ebaySoldUrl: cb.extractionData?.ebaySoldUrl,
+                      isSpecial: Boolean(cb.fancySerialType && cb.fancySerialType !== 'None') || Boolean(cb.isReplacementNote),
+                      isVerified: true,
+                      hasMissingInfo: !cb.pickNumber || !cb.issueYear,
+                      frontImage: cb.frontImageUrl || cb.displayImageUrl || '',
+                      backImage: cb.backImageUrl || '',
+                      notes: cb.notes || 'Cloud synchronized specimen',
+                      serialNumber: cb.fullSerialNumber || 'N/A',
+                    });
+                  }
+                }
+              }
+            }
+          } catch {}
+
           setBanknotesList([...mapped, ...SAMPLE_BANKNOTES]);
+        } else {
+          // If local IDB is empty, still attempt to hydrate from Cloud PostgreSQL
+          try {
+            const cloudRes = await fetch('/api/banknotes').catch(() => null);
+            if (cloudRes && cloudRes.ok) {
+              const cloudData = await cloudRes.json();
+              if (cloudData?.banknotes && Array.isArray(cloudData.banknotes) && cloudData.banknotes.length > 0) {
+                const cloudMapped = cloudData.banknotes.map((cb: any) => {
+                  const countryName = cb.countryOfOrigin || 'Unknown';
+                  return {
+                    id: cb.id,
+                    country: countryName,
+                    countryFlag: getCountryFlag(countryName),
+                    denomination: cb.denomination && cb.denomination !== 'Unknown' ? cb.denomination : '—',
+                    year: cb.issueYear || cb.seriesDate || '—',
+                    pickNumber: cb.pickNumber || 'P-Pending',
+                    condition: cb.conditionGrade || 'UNC',
+                    qty: 1,
+                    value: cb.collectorMarketValue || 'Valuation Pending',
+                    pmgValue: cb.numistaPmgValue ? cb.numistaPmgValue.split('/')?.[0]?.trim() : undefined,
+                    numistaValue: cb.numistaPmgValue ? cb.numistaPmgValue.split('/')?.[1]?.trim() : undefined,
+                    ebayLastSold: cb.extractionData?.ebayLastSold,
+                    ebaySoldUrl: cb.extractionData?.ebaySoldUrl,
+                    isSpecial: Boolean(cb.fancySerialType && cb.fancySerialType !== 'None') || Boolean(cb.isReplacementNote),
+                    isVerified: true,
+                    hasMissingInfo: !cb.pickNumber || !cb.issueYear,
+                    frontImage: cb.frontImageUrl || cb.displayImageUrl || '',
+                    backImage: cb.backImageUrl || '',
+                    notes: cb.notes || 'Cloud synchronized specimen',
+                    serialNumber: cb.fullSerialNumber || 'N/A',
+                  };
+                });
+                setBanknotesList([...cloudMapped, ...SAMPLE_BANKNOTES]);
+              }
+            }
+          } catch {}
         }
       } catch (err) {
         console.warn('Error loading local banknotes for dashboard:', err);

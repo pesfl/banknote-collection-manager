@@ -232,17 +232,28 @@ export function mapLocalSpecimenToBanknote(l: LocalSpecimen): Banknote {
 }
 
 export async function getBanknoteById(id: string): Promise<Banknote | null> {
-  // 1. Check local IndexedDB
-  try {
-    const local = await getSpecimen(id);
-    if (local) {
-      return mapLocalSpecimenToBanknote(local);
+  // 1. Check local IndexedDB (browser)
+  if (typeof window !== 'undefined') {
+    try {
+      const local = await getSpecimen(id);
+      if (local) {
+        return mapLocalSpecimenToBanknote(local);
+      }
+    } catch (err) {
+      console.warn(`Could not check IndexedDB for specimen ${id}:`, err);
     }
-  } catch (err) {
-    console.warn(`Could not check IndexedDB for specimen ${id}:`, err);
+
+    // 2. Query cloud database API
+    try {
+      const res = await fetch(`/api/banknotes/${id}`).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data?.banknote) return data.banknote;
+      }
+    } catch {}
   }
 
-  // 2. Check Mock / Catalog banknotes
+  // 3. Check Mock / Catalog banknotes
   const found = MOCK_BANKNOTES.find(
     (b) => b.id?.toLowerCase() === id?.toLowerCase() || b.fullSerialNumber?.toLowerCase() === id?.toLowerCase()
   );
@@ -253,18 +264,47 @@ export async function getBanknoteById(id: string): Promise<Banknote | null> {
 
 export async function getAllBanknotes(): Promise<Banknote[]> {
   const list: Banknote[] = [];
-  try {
-    const locals = await getAllSpecimens();
-    if (locals && locals.length > 0) {
-      for (const loc of locals) {
-        list.push(mapLocalSpecimenToBanknote(loc));
+  const seenIds = new Set<string>();
+
+  // 1. Load local IndexedDB (browser)
+  if (typeof window !== 'undefined') {
+    try {
+      const locals = await getAllSpecimens();
+      if (locals && locals.length > 0) {
+        for (const loc of locals) {
+          const mapped = mapLocalSpecimenToBanknote(loc);
+          if (mapped.id) seenIds.add(mapped.id);
+          list.push(mapped);
+        }
       }
+    } catch (err) {
+      console.warn('Error loading specimens from IndexedDB:', err);
     }
-  } catch (err) {
-    console.warn('Error loading specimens from IndexedDB:', err);
+
+    // 2. Query cloud database API
+    try {
+      const res = await fetch('/api/banknotes').catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data?.banknotes && Array.isArray(data.banknotes)) {
+          for (const note of data.banknotes) {
+            if (note.id && !seenIds.has(note.id)) {
+              seenIds.add(note.id);
+              list.push(note);
+            }
+          }
+        }
+      }
+    } catch {}
   }
 
-  // Add mock banknotes
-  list.push(...MOCK_BANKNOTES);
+  // 3. Add mock banknotes (deduplicated)
+  for (const mock of MOCK_BANKNOTES) {
+    if (mock.id && !seenIds.has(mock.id)) {
+      list.push(mock);
+    }
+  }
+
   return list;
 }
+

@@ -155,3 +155,7 @@
 - 2026-10-16: Created shared CondensedSpecimenModal to eliminate duplicated inspector code
 - 2026-10-16: Consolidated Home & All Notes specimen overlays to use shared component
 - 2026-10-16: Verified full feature parity and All Fields View navigation across views
+- 2026-10-16: Configured Prisma schema with directUrl for Neon serverless connection pooler
+- 2026-10-16: Built /api/banknotes endpoint to sync inventory with Neon PostgreSQL cloud
+- 2026-10-16: Connected client dashboard & inventory to bi-directional Neon cloud sync
+- 2026-10-16: Created isolated Neon 'banknotes' database & pushed schema with zero data loss

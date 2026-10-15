@@ -236,7 +236,82 @@ function BanknotesInventoryContent() {
               updatedAt: new Date(l.capturedAt),
             } as any;
           });
+
+          const localIds = new Set(local.map((l) => l.id));
+
+          // Merge cloud banknotes from Neon PostgreSQL
+          try {
+            const cloudRes = await fetch('/api/banknotes').catch(() => null);
+            if (cloudRes && cloudRes.ok) {
+              const cloudData = await cloudRes.json();
+              if (cloudData?.banknotes && Array.isArray(cloudData.banknotes)) {
+                for (const cb of cloudData.banknotes) {
+                  if (!localIds.has(cb.id)) {
+                    localIds.add(cb.id);
+                    mappedLocal.push({
+                      id: cb.id,
+                      userId: cb.userId || 'cloud',
+                      isReplacementNote: Boolean(cb.isReplacementNote),
+                      countryOfOrigin: cb.countryOfOrigin || 'Unknown',
+                      denomination: cb.denomination || '—',
+                      currency: cb.currency || '',
+                      pickNumber: cb.pickNumber || 'P-Pending',
+                      issueYear: cb.issueYear || undefined,
+                      seriesDate: cb.seriesDate || undefined,
+                      fullSerialNumber: cb.fullSerialNumber || 'N/A',
+                      conditionGrade: cb.conditionGrade || 'UNC',
+                      machineEstimatedGrade: cb.machineEstimatedGrade || undefined,
+                      fancySerialType: cb.fancySerialType || 'None',
+                      frontImageUrl: cb.frontImageUrl || cb.displayImageUrl || undefined,
+                      backImageUrl: cb.backImageUrl || undefined,
+                      displayImageUrl: cb.displayImageUrl || cb.frontImageUrl || undefined,
+                      notes: cb.notes || 'Cloud synchronized specimen',
+                      collectorMarketValue: cb.collectorMarketValue || undefined,
+                      numistaPmgValue: cb.numistaPmgValue || undefined,
+                      createdAt: new Date(cb.createdAt || Date.now()),
+                      updatedAt: new Date(cb.updatedAt || Date.now()),
+                    } as any);
+                  }
+                }
+              }
+            }
+          } catch {}
+
           setBanknotes([...mappedLocal, ...MOCK_BANKNOTES]);
+        } else {
+          // If local IDB is empty, attempt to hydrate from Cloud PostgreSQL
+          try {
+            const cloudRes = await fetch('/api/banknotes').catch(() => null);
+            if (cloudRes && cloudRes.ok) {
+              const cloudData = await cloudRes.json();
+              if (cloudData?.banknotes && Array.isArray(cloudData.banknotes) && cloudData.banknotes.length > 0) {
+                const cloudMapped = cloudData.banknotes.map((cb: any) => ({
+                  id: cb.id,
+                  userId: cb.userId || 'cloud',
+                  isReplacementNote: Boolean(cb.isReplacementNote),
+                  countryOfOrigin: cb.countryOfOrigin || 'Unknown',
+                  denomination: cb.denomination || '—',
+                  currency: cb.currency || '',
+                  pickNumber: cb.pickNumber || 'P-Pending',
+                  issueYear: cb.issueYear || undefined,
+                  seriesDate: cb.seriesDate || undefined,
+                  fullSerialNumber: cb.fullSerialNumber || 'N/A',
+                  conditionGrade: cb.conditionGrade || 'UNC',
+                  machineEstimatedGrade: cb.machineEstimatedGrade || undefined,
+                  fancySerialType: cb.fancySerialType || 'None',
+                  frontImageUrl: cb.frontImageUrl || cb.displayImageUrl || undefined,
+                  backImageUrl: cb.backImageUrl || undefined,
+                  displayImageUrl: cb.displayImageUrl || cb.frontImageUrl || undefined,
+                  notes: cb.notes || 'Cloud synchronized specimen',
+                  collectorMarketValue: cb.collectorMarketValue || undefined,
+                  numistaPmgValue: cb.numistaPmgValue || undefined,
+                  createdAt: new Date(cb.createdAt || Date.now()),
+                  updatedAt: new Date(cb.updatedAt || Date.now()),
+                } as any));
+                setBanknotes([...cloudMapped, ...MOCK_BANKNOTES]);
+              }
+            }
+          } catch {}
         }
       } catch (err) {
         console.error('Error querying local specimens:', err);

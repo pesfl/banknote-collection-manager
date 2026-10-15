@@ -131,3 +131,33 @@ export async function PATCH(
   }
 }
 
+/**
+ * GET /api/banknotes/[id]
+ * Fetches a single banknote record
+ */
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    if (!id) {
+      return NextResponse.json({ error: 'Specimen ID required' }, { status: 400 });
+    }
+
+    const banknote = await prisma.banknote.findUnique({
+      where: { id },
+    });
+
+    if (!banknote) {
+      return NextResponse.json({ error: 'Specimen not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, banknote });
+  } catch (err: any) {
+    console.warn(`[Banknotes API] Could not fetch note from db:`, err?.message);
+    return NextResponse.json({ error: 'Specimen not found in database', offline: true }, { status: 404 });
+  }
+}
+
+

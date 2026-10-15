@@ -371,6 +371,12 @@ export default function CondensedSpecimenModal({
             });
             window.dispatchEvent(new CustomEvent('banknote-specimen-updated', { detail: { id: activeSpecimen.id } }));
           }
+          // Sync to central cloud PostgreSQL (Neon)
+          fetch('/api/banknotes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          }).catch(() => {});
         } catch (e) {
           console.warn('Failed to save valuation into IDB:', e);
         }
