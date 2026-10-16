@@ -184,3 +184,9 @@
 
 ## 2026-10-17
 - 2026-10-17: Added prisma generate to build and postinstall scripts to fix Vercel deploy
+- 2026-10-17: Fixed low-number fancy serial multiplier to prevent runaway false positives
+- 2026-10-17: Fixed eBay query builder to eliminate syntax-breaking quotes in parentheses
+- 2026-10-17: Added US destination zip & country parameters (_stpos & _fcid) to eBay URLs
+- 2026-10-17: Verified active eBay listing 362211982947 ($1100) via live browser inspection
+- 2026-10-17: Diagnosed silent IP geo-drop hiding US domestic listings from non-US buyers
+- 2026-10-17: Verified unquoted Pick query (119a,P119a,P-119a) returns 7 live eBay matches

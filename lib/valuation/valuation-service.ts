@@ -319,21 +319,12 @@ export async function fetchNumistaValuation(input: ValuationQueryInput): Promise
  * Build clean, high-match search query for eBay completed/sold marketplace
  */
 export function buildCleanEBayQuery(input: ValuationQueryInput): string {
-  // Extract 4-digit issue year if present (e.g., 1941, 1986, 2018)
-  let yearPart = '';
-  if (input.issueYear) {
-    const yMatch = input.issueYear.match(/\b(18|19|20)\d{2}\b/);
-    if (yMatch) {
-      yearPart = yMatch[0];
-    }
-  }
-
   const rawCountry = (input.countryOfOrigin || '').replace(/unknown/i, '').trim();
   let countryGroup = rawCountry;
   if (/philippines/i.test(rawCountry)) {
     countryGroup = '(Philippines,Philippine)';
   } else if (/united states|usa/i.test(rawCountry)) {
-    countryGroup = '(USA,"United States",US)';
+    countryGroup = '(USA,US)';
   } else if (/united kingdom|britain|england/i.test(rawCountry)) {
     countryGroup = '(UK,Britain,England)';
   } else if (/canada/i.test(rawCountry)) {
@@ -342,41 +333,76 @@ export function buildCleanEBayQuery(input: ValuationQueryInput): string {
     countryGroup = 'India';
   }
 
+  // Star / Replacement note Boolean synonyms (Clean eBay syntax, NO quotes around wildcard *)
+  let starGroup = '';
+  if (input.isReplacementNote) {
+    starGroup = '(Star,Replacement)';
+  }
+
+  // Extract Pick number if available (e.g. "P-119a*" -> "119a" or "P-119a")
+  let cleanPick = '';
+  if (input.pickNumber) {
+    cleanPick = input.pickNumber.replace(/[*#]/g, '').trim();
+  }
+
+  // If Pick catalog number is known, it is by far the highest-precision numismatic identifier
+  // In eBay syntax: NEVER put quotes inside parentheses! e.g. (119a,P119a,P-119a)
+  if (cleanPick) {
+    const rawNum = cleanPick.replace(/^P-?/i, '');
+    const pickGroup = `(${rawNum},P${rawNum},P-${rawNum})`;
+
+    const parts = [countryGroup, pickGroup, starGroup].filter(Boolean);
+    return parts.join(' ') + ' -replica -reproduction';
+  }
+
+  // Fallback if no Pick number: Denomination + Year + Country
+  let yearPart = '';
+  if (input.issueYear) {
+    const yMatch = input.issueYear.match(/\b(18|19|20)\d{2}\b/);
+    if (yMatch) {
+      yearPart = yMatch[0];
+    }
+  }
+
   // Extract numeric and currency parts from denomination
   const rawDenom = (input.denomination || '').trim();
   const numMatch = rawDenom.match(/\d[\d,.]*/);
   const numberPart = numMatch ? numMatch[0] : '';
 
+  // Expand common digits to word equivalents (clean unquoted tokens)
+  const DIGIT_WORDS: Record<string, string> = {
+    '1': '(1,One)',
+    '2': '(2,Two)',
+    '5': '(5,Five)',
+    '10': '(10,Ten)',
+    '20': '(20,Twenty)',
+    '50': '(50,Fifty)',
+    '100': '(100,Hundred)',
+  };
+  const numGroup = DIGIT_WORDS[numberPart] || numberPart;
+
   let currencyGroup = '';
   if (/piso|peso/i.test(rawDenom)) {
-    currencyGroup = '(Piso,Pesos,Pisos)';
+    currencyGroup = '(Peso,Pesos,Piso,Pisos)';
   } else if (/rupee|inr|₹/i.test(rawDenom)) {
-    currencyGroup = '(Rupees,Rupee)';
+    currencyGroup = '(Rupee,Rupees)';
   } else if (/dollar|usd|\$/i.test(rawDenom)) {
-    currencyGroup = '(Dollars,Dollar)';
+    currencyGroup = '(Dollar,Dollars)';
   } else if (/pound|gbp|£/i.test(rawDenom)) {
-    currencyGroup = '(Pounds,Pound)';
+    currencyGroup = '(Pound,Pounds)';
   } else if (/yen|jpy|¥/i.test(rawDenom)) {
     currencyGroup = 'Yen';
   } else if (/euro|eur|€/i.test(rawDenom)) {
     currencyGroup = 'Euro';
   }
 
-  // Star / Replacement note Boolean synonyms
-  let starGroup = '';
-  if (input.isReplacementNote) {
-    starGroup = '(Star,Replacement,"*")';
-  }
+  // Assemble query with Boolean groups
+  const queryParts = [countryGroup, numGroup, currencyGroup, yearPart, starGroup].filter(Boolean);
 
-  // Assemble query with Boolean groups: Year first (e.g. "1941"), then Country, then Denomination
-  const queryParts = [yearPart, countryGroup, numberPart, currencyGroup, starGroup].filter(Boolean);
-
-  // If query is sparse, add banknote
   if (queryParts.length < 2) {
     queryParts.push('banknote');
   }
 
-  // Append negative filter to eliminate novelty fakes and replicas
   return queryParts.join(' ') + ' -replica -reproduction';
 }
 
@@ -394,8 +420,12 @@ export async function fetchEBaySoldValuation(input: ValuationQueryInput): Promis
   soldDate?: string;
 }> {
   const cleanQuery = buildCleanEBayQuery(input);
-  const searchSoldUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanQuery)}&LH_Sold=1&LH_Complete=1`;
-  const searchActiveUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanQuery)}`;
+  // LH_PrefLoc=2 forces worldwide item search
+  // _stpos=10001&_fcid=1 forces US buyer location so eBay does not hide US domestic listings from international searchers
+  // _fspt=1 includes items without instant shipping calculation
+  // _sacat=11116 targets Coins & Paper Money
+  const searchSoldUrl = `https://www.ebay.com/sch/11116/i.html?_nkw=${encodeURIComponent(cleanQuery)}&LH_Sold=1&LH_Complete=1&LH_PrefLoc=2&_stpos=10001&_fcid=1&_fspt=1`;
+  const searchActiveUrl = `https://www.ebay.com/sch/11116/i.html?_nkw=${encodeURIComponent(cleanQuery)}&LH_PrefLoc=2&_stpos=10001&_fcid=1&_fspt=1`;
 
   // 1. Try real live eBay Browse API if credentials exist
   try {
@@ -539,12 +569,23 @@ export async function resolveBanknoteValuation(input: ValuationQueryInput): Prom
   }
 
   const fancyType = (input.fancySerialType || '').toUpperCase().trim();
+  const numericVal = parseInt((input.serialNumeric || '').replace(/\D/g, ''), 10);
+
   if (fancyType.includes('SOLID')) {
     specialMultiplier *= 15.0;
     specialTags.push('Solid Serial (+1400%)');
   } else if (fancyType.includes('LOW')) {
-    specialMultiplier *= 7.5;
-    specialTags.push('Low Serial # (+650%)');
+    if (!isNaN(numericVal) && numericVal > 0 && numericVal < 100) {
+      specialMultiplier *= 7.5;
+      specialTags.push('Two-Digit Low Serial # (<100) (+650%)');
+    } else if (!isNaN(numericVal) && numericVal >= 100 && numericVal < 1000) {
+      specialMultiplier *= 2.0;
+      specialTags.push('Three-Digit Serial # (<1000) (+100%)');
+    } else if (isNaN(numericVal)) {
+      specialMultiplier *= 1.5;
+      specialTags.push('Low Serial Tag (+50%)');
+    }
+    // Note: Numbers >= 1000 (such as 81,627) receive 0% fancy serial premium
   } else if (fancyType.includes('LADDER') || fancyType.includes('RADAR') || fancyType.includes('BINARY')) {
     specialMultiplier *= 2.5;
     specialTags.push(`${input.fancySerialType} Fancy Serial (+150%)`);
