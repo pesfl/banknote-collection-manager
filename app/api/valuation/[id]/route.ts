@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveBanknoteValuation } from '@/lib/valuation/valuation-service';
+import { 
+  resolveBanknoteValuation, 
+  recordValuationLog, 
+  getBanknoteValuationHistory 
+} from '@/lib/valuation/valuation-service';
 import { prisma } from '@/lib/db/prisma';
 
 export async function GET(
@@ -28,22 +32,17 @@ export async function GET(
       fancySerialType: banknote?.fancySerialType,
     });
 
+    let history: any[] = [];
     if (banknote) {
-      try {
-        await prisma.banknote.update({
-          where: { id },
-          data: {
-            collectorMarketValue: valuation.collectorMarketValue,
-            numistaPmgValue: valuation.numistaValue,
-          },
-        });
-      } catch (_) {}
+      await recordValuationLog(id, valuation, 'api_query');
+      history = await getBanknoteValuationHistory(id);
     }
 
     return NextResponse.json({
       success: true,
       ...valuation,
       data: valuation,
+      history,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -72,20 +71,17 @@ export async function POST(
       fancySerialType: body.fancySerialType,
     });
 
+    let history: any[] = [];
     try {
-      await prisma.banknote.update({
-        where: { id },
-        data: {
-          collectorMarketValue: valuation.collectorMarketValue,
-          numistaPmgValue: valuation.numistaValue,
-        },
-      });
+      await recordValuationLog(id, valuation, body.source || 'user_revaluation', body.notes);
+      history = await getBanknoteValuationHistory(id);
     } catch (_) {}
 
     return NextResponse.json({
       success: true,
       ...valuation,
       data: valuation,
+      history,
     });
   } catch (err: any) {
     return NextResponse.json(

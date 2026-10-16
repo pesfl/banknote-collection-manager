@@ -76,6 +76,12 @@ export const BanknoteSchema = z.object({
   // Valuation Data
   numistaPmgValue: z.string().optional(),
   collectorMarketValue: z.string().optional(),
+  pmgValue: z.string().optional(),
+  heritageValue: z.string().optional(),
+  stacksBowersValue: z.string().optional(),
+  ebayValue: z.string().optional(),
+  numistaValue: z.string().optional(),
+  banknoteArchivesValue: z.string().optional(),
 
   // Acquisition
   acquisitionDate: z.date().optional(),
@@ -267,13 +273,20 @@ export type AIExtraction = z.infer<typeof AIExtractionSchema>;
 
 export const BanknoteValuationSchema = z.object({
   pmgValue: z.string().optional(),
+  heritageValue: z.string().optional(),
+  stacksBowersValue: z.string().optional(),
+  ebayValue: z.string().optional(),
   numistaValue: z.string().optional(),
+  banknoteArchivesValue: z.string().optional(),
   ebayLastSold: z.string().optional(),
   ebaySoldDate: z.string().optional(),
   ebaySoldUrl: z.string().optional(),
   ebayActiveUrl: z.string().optional(),
   collectorMarketValue: z.string(),
+  wholesaleBuyoutValue: z.string().optional(),
   faceValue: z.string().optional(),
+  conflictDetected: z.boolean().default(false),
+  divergencePercentage: z.number().optional(),
   valuationConfidence: z.enum(['low', 'medium', 'high', 'exceptional']).default('medium'),
   valuationSources: z.array(z.string()).default([]),
   lastValuationDate: z.string().optional(),
@@ -281,6 +294,25 @@ export const BanknoteValuationSchema = z.object({
 });
 
 export type BanknoteValuation = z.infer<typeof BanknoteValuationSchema>;
+
+export const ValuationLogRecordSchema = z.object({
+  id: z.string(),
+  banknoteId: z.string(),
+  pmgValue: z.string().nullish(),
+  heritageValue: z.string().nullish(),
+  stacksBowersValue: z.string().nullish(),
+  ebayValue: z.string().nullish(),
+  numistaValue: z.string().nullish(),
+  banknoteArchivesValue: z.string().nullish(),
+  estimatedValue: z.string().nullish(),
+  confidenceScore: z.number().nullish(),
+  conflictDetected: z.boolean().default(false),
+  source: z.string(),
+  notes: z.string().nullish(),
+  createdAt: z.date().or(z.string()),
+});
+
+export type ValuationLogRecord = z.infer<typeof ValuationLogRecordSchema>;
 
 export const ValuationSourceEnum = z.enum([
   'PMG_PRICE_GUIDE',

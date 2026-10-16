@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { getAllSpecimens, deleteSpecimen } from '@/lib/offline/idb';
+import { useSearchParams } from 'next/navigation';
+import { getAllSpecimens, deleteSpecimen, clearAllSpecimens, clearAllSyncData } from '@/lib/offline/idb';
 import CondensedSpecimenModal from '@/components/banknote/CondensedSpecimenModal';
 import {
   Banknote,
@@ -155,136 +156,7 @@ interface BanknoteRow {
   ebaySoldUrl?: string;
 }
 
-const SAMPLE_BANKNOTES: BanknoteRow[] = [
-  {
-    id: 'BN-BR-001',
-    country: 'Brazil',
-    countryFlag: '🇧🇷',
-    denomination: '500 Cruzeiros',
-    year: '1981',
-    pickNumber: 'P-198b',
-    condition: 'UNC',
-    qty: 12,
-    value: '$240',
-    isSpecial: true,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
-    notes: 'Deodoro da Fonseca portrait / Central Bank of Brazil engraving.',
-    serialNumber: 'A 0482019482 C'
-  },
-  {
-    id: 'BN-AR-002',
-    country: 'Argentina',
-    countryFlag: '🇦🇷',
-    denomination: '100 Australes',
-    year: '1985',
-    pickNumber: 'P-331a',
-    condition: 'UNC',
-    qty: 24,
-    value: '$168',
-    isSpecial: false,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
-    notes: 'Nicolás Avellaneda portrait. Liberty holding torch on reverse.',
-    serialNumber: '14.829.301 A'
-  },
-  {
-    id: 'BN-BO-003',
-    country: 'Bolivia',
-    countryFlag: '🇧🇴',
-    denomination: '10 Bolivianos',
-    year: '1981',
-    pickNumber: 'P-164a',
-    condition: 'UNC',
-    qty: 30,
-    value: '$90',
-    isSpecial: true,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
-    notes: 'Painter Cecilio Guzmán de Rojas / Mount Illimani landscape.',
-    serialNumber: '87654321'
-  },
-  {
-    id: 'BN-MX-004',
-    country: 'Mexico',
-    countryFlag: '🇲🇽',
-    denomination: '1000 Pesos',
-    year: '1993',
-    pickNumber: 'P-94d',
-    condition: 'UNC',
-    qty: 18,
-    value: '$180',
-    isSpecial: false,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=80',
-    notes: 'Sor Juana Inés de la Cruz portrait. Bank of Mexico commemorative issue.',
-    serialNumber: 'B4829104'
-  },
-  {
-    id: 'BN-IN-005',
-    country: 'India',
-    countryFlag: '🇮🇳',
-    denomination: '50 Rupees',
-    year: '2018',
-    pickNumber: 'P-104',
-    condition: 'UNC',
-    qty: 8,
-    value: '$2.00',
-    pmgValue: '$2.40',
-    numistaValue: '$2.00',
-    isSpecial: false,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&auto=format&fit=crop&q=80',
-    notes: 'Mahatma Gandhi new series. RBI issue with Hampi stone chariot reverse.',
-    serialNumber: '72D 819203'
-  },
-  {
-    id: 'BN-CA-006',
-    country: 'Canada',
-    countryFlag: '🇨🇦',
-    denomination: '1,000 Dollars',
-    year: '1954',
-    pickNumber: 'P-45a',
-    condition: 'UNC',
-    qty: 2,
-    value: '$2,750',
-    isSpecial: true,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=80',
-    notes: 'Queen Elizabeth II portrait. Devil face variety verified clean.',
-    serialNumber: 'A1234567'
-  },
-  {
-    id: 'BN-US-007',
-    country: 'United States',
-    countryFlag: '🇺🇸',
-    denomination: '$100',
-    year: '2013',
-    pickNumber: 'P-540',
-    condition: 'AU',
-    qty: 4,
-    value: '$145',
-    isSpecial: false,
-    isVerified: true,
-    hasMissingInfo: false,
-    frontImage: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=500&auto=format&fit=crop&q=80',
-    backImage: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=500&auto=format&fit=crop&q=80',
-    notes: 'Benjamin Franklin portrait. Color-shifting bell in inkwell.',
-    serialNumber: 'L12345678A'
-  },
-];
+const SAMPLE_BANKNOTES: BanknoteRow[] = [];
 
 function getCountryFlag(countryName?: string): string {
   if (!countryName) return '🌐';
@@ -306,8 +178,10 @@ function getCountryFlag(countryName?: string): string {
   return '🌐';
 }
 
-export default function DashboardPage() {
-  const [banknotesList, setBanknotesList] = useState<BanknoteRow[]>(SAMPLE_BANKNOTES);
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const urlCountry = searchParams?.get('country');
+  const [banknotesList, setBanknotesList] = useState<BanknoteRow[]>([]);
 
   useEffect(() => {
     function getSafeBlobUrl(blob?: any): string {
@@ -395,11 +269,46 @@ export default function DashboardPage() {
                     });
                   }
                 }
+
+                // Automatically push any existing local notes up to Neon PostgreSQL cloud
+                const cloudBanknoteIds = new Set(cloudData.banknotes.map((b: any) => b.id));
+                const unSynced = local.filter((l: any) => !cloudBanknoteIds.has(l.id));
+                if (unSynced.length > 0) {
+                  const toUpload = unSynced.map((l: any) => {
+                    const ex = (l.extractedData || {}) as any;
+                    return {
+                      id: l.id,
+                      countryOfOrigin: ex.countryOfOrigin || ex.country,
+                      denomination: ex.denomination,
+                      currency: ex.currency,
+                      pickNumber: ex.pickNumber,
+                      issueYear: ex.issueYear,
+                      seriesDate: ex.seriesDate,
+                      fullSerialNumber: ex.fullSerialNumber,
+                      serialPrefix: ex.serialPrefix,
+                      serialNumeric: ex.serialNumeric,
+                      serialSuffix: ex.serialSuffix,
+                      conditionGrade: ex.conditionGrade,
+                      machineEstimatedGrade: ex.machineEstimatedGrade,
+                      fancySerialType: ex.fancySerialType,
+                      isReplacementNote: ex.isReplacementNote,
+                      notes: ex.notes || l.notes,
+                      collectorMarketValue: ex.collectorMarketValue || ex.valuation?.collectorMarketValue,
+                      numistaPmgValue: ex.numistaPmgValue || ex.numistaValue,
+                      extractedData: ex,
+                    };
+                  });
+                  fetch('/api/banknotes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(toUpload),
+                  }).catch(() => {});
+                }
               }
             }
           } catch {}
 
-          setBanknotesList([...mapped, ...SAMPLE_BANKNOTES]);
+          setBanknotesList(mapped);
         } else {
           // If local IDB is empty, still attempt to hydrate from Cloud PostgreSQL
           try {
@@ -432,10 +341,16 @@ export default function DashboardPage() {
                     serialNumber: cb.fullSerialNumber || 'N/A',
                   };
                 });
-                setBanknotesList([...cloudMapped, ...SAMPLE_BANKNOTES]);
+                setBanknotesList(cloudMapped);
+              } else {
+                setBanknotesList([]);
               }
+            } else {
+              setBanknotesList([]);
             }
-          } catch {}
+          } catch {
+            setBanknotesList([]);
+          }
         }
       } catch (err) {
         console.warn('Error loading local banknotes for dashboard:', err);
@@ -468,6 +383,66 @@ export default function DashboardPage() {
   const [inspectSpecimen, setInspectSpecimen] = useState<BanknoteRow | null>(null);
 
 
+
+  // Dynamic Metrics derived directly from actual banknotes
+  const metrics = useMemo(() => {
+    const totalNotes = banknotesList.reduce((acc, n) => acc + (Number(n.qty) || 1), 0);
+    const countrySet = new Set(banknotesList.map((n) => n.country?.trim()).filter(Boolean));
+    const differentNotesSet = new Set(
+      banknotesList.map((n) => `${n.country?.trim()}_${n.denomination?.trim()}_${n.year?.trim()}_${n.pickNumber?.trim()}`).filter(Boolean)
+    );
+    const differentNotes = differentNotesSet.size;
+    const duplicates = Math.max(0, totalNotes - differentNotes);
+
+    const totalValueNum = banknotesList.reduce((acc, n) => {
+      const raw = (n.value || '').replace(/[^0-9.]/g, '');
+      const parsed = parseFloat(raw);
+      const qty = Number(n.qty) || 1;
+      return acc + (isNaN(parsed) ? 0 : parsed * qty);
+    }, 0);
+
+    const formattedValue = totalValueNum === 0
+      ? '$0.00'
+      : totalValueNum.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+    return {
+      totalNotes,
+      countries: countrySet.size,
+      differentNotes,
+      duplicates,
+      totalValueStr: formattedValue,
+    };
+  }, [banknotesList]);
+
+  // Dynamic filter options derived from current inventory
+  const availableCountries = useMemo(() => {
+    return Array.from(new Set(banknotesList.map((n) => n.country?.trim()).filter(Boolean))).sort() as string[];
+  }, [banknotesList]);
+
+  const availableDenominations = useMemo(() => {
+    return Array.from(new Set(banknotesList.map((n) => n.denomination?.trim()).filter((d) => d && d !== '—'))).sort() as string[];
+  }, [banknotesList]);
+
+  const availableYears = useMemo(() => {
+    return Array.from(new Set(banknotesList.map((n) => n.year?.trim()).filter((y) => y && y !== '—'))).sort() as string[];
+  }, [banknotesList]);
+
+  const availablePickNumbers = useMemo(() => {
+    return Array.from(new Set(banknotesList.map((n) => n.pickNumber?.trim()).filter((p) => p && p !== '—' && p !== 'P-Pending'))).sort() as string[];
+  }, [banknotesList]);
+
+  // Synchronize countryFilter with ?country=... query parameter from URL
+  useEffect(() => {
+    if (!urlCountry) return;
+    const match = availableCountries.find(
+      (c) => c.toLowerCase() === urlCountry.toLowerCase()
+    );
+    if (match) {
+      setCountryFilter(match);
+    } else {
+      setCountryFilter(urlCountry);
+    }
+  }, [urlCountry, availableCountries]);
 
   // Filtered rows
   const filteredNotes = useMemo(() => {
@@ -563,7 +538,7 @@ export default function DashboardPage() {
                   Total Notes
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
-                  18,700
+                  {metrics.totalNotes.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -578,7 +553,7 @@ export default function DashboardPage() {
                   Countries
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
-                  142
+                  {metrics.countries.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -593,7 +568,7 @@ export default function DashboardPage() {
                   Different Notes
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
-                  3,850
+                  {metrics.differentNotes.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -608,7 +583,7 @@ export default function DashboardPage() {
                   Duplicates
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
-                  14,850
+                  {metrics.duplicates.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -623,7 +598,7 @@ export default function DashboardPage() {
                   Estimated Value
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight font-mono">
-                  $1,248,750
+                  {metrics.totalValueStr}
                 </span>
               </div>
             </div>
@@ -646,14 +621,10 @@ export default function DashboardPage() {
                   onChange={(e) => setCountryFilter(e.target.value)}
                   className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
                 >
-                  <option value="All">All</option>
-                  <option value="Brazil">Brazil</option>
-                  <option value="Argentina">Argentina</option>
-                  <option value="Bolivia">Bolivia</option>
-                  <option value="Mexico">Mexico</option>
-                  <option value="India">India</option>
-                  <option value="Canada">Canada</option>
-                  <option value="United States">United States</option>
+                  <option value="All">All {availableCountries.length > 0 ? `(${availableCountries.length})` : ''}</option>
+                  {availableCountries.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -670,12 +641,10 @@ export default function DashboardPage() {
                   onChange={(e) => setDenomFilter(e.target.value)}
                   className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
                 >
-                  <option value="All">All</option>
-                  <option value="10">10</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                  <option value="500">500</option>
-                  <option value="1000">1000</option>
+                  <option value="All">All {availableDenominations.length > 0 ? `(${availableDenominations.length})` : ''}</option>
+                  {availableDenominations.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 </select>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -692,12 +661,10 @@ export default function DashboardPage() {
                   onChange={(e) => setYearFilter(e.target.value)}
                   className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
                 >
-                  <option value="All">All</option>
-                  <option value="1954">1954</option>
-                  <option value="1981">1981</option>
-                  <option value="1985">1985</option>
-                  <option value="1993">1993</option>
-                  <option value="2013">2013</option>
+                  <option value="All">All {availableYears.length > 0 ? `(${availableYears.length})` : ''}</option>
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
                 </select>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -714,13 +681,10 @@ export default function DashboardPage() {
                   onChange={(e) => setPickFilter(e.target.value)}
                   className="w-full appearance-none px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111c3d] text-slate-900 dark:text-white font-medium outline-none focus:border-[#003399] shadow-2xs pr-8 hover:border-slate-400 transition-colors"
                 >
-                  <option value="All">All</option>
-                  <option value="P-45a">P-45a</option>
-                  <option value="P-198b">P-198b</option>
-                  <option value="P-331a">P-331a</option>
-                  <option value="P-164a">P-164a</option>
-                  <option value="P-94d">P-94d</option>
-                  <option value="P-540">P-540</option>
+                  <option value="All">All {availablePickNumbers.length > 0 ? `(${availablePickNumbers.length})` : ''}</option>
+                  {availablePickNumbers.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
                 </select>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -742,6 +706,9 @@ export default function DashboardPage() {
                   <option value="AU">AU</option>
                   <option value="XF">XF</option>
                   <option value="VF">VF</option>
+                  <option value="F">F</option>
+                  <option value="VG">VG</option>
+                  <option value="Good">Good</option>
                 </select>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -767,7 +734,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ========================================================================= */}
-          {/* ACTION BUTTONS ROW (+ Add Note, Export)                                    */}
+          {/* ACTION BUTTONS ROW (+ Add Note, Clear Collection, Export)                  */}
           {/* ========================================================================= */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
 
@@ -840,8 +807,51 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
-                {filteredNotes.map((note) => (
-                  <tr
+                {filteredNotes.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-16 text-center">
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-slate-500 dark:text-slate-400">
+                        <div className="h-14 w-14 rounded-2xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-[#002b80] dark:text-blue-400 mb-3.5 border border-blue-100 dark:border-blue-900/60 shadow-xs">
+                          <Banknote className="h-7 w-7 stroke-[1.8]" />
+                        </div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1.5">
+                          {banknotesList.length === 0 ? 'No banknotes in collection yet' : 'No banknotes match your filters'}
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-5 leading-relaxed text-center">
+                          {banknotesList.length === 0
+                            ? 'Your collection is fresh and empty. Scan or upload both sides of a banknote to let the AI extract details, estimate grades, and catalog it.'
+                            : 'Try adjusting your filters or search query to find matching banknotes in your collection.'}
+                        </p>
+                        {banknotesList.length === 0 ? (
+                          <Link
+                            href="/capture"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#003399] hover:bg-[#002b80] text-white text-xs font-bold shadow-md shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-95"
+                          >
+                            <Plus className="h-4 w-4" />
+                            <span>Capture First Banknote</span>
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setCountryFilter('All');
+                              setDenomFilter('All');
+                              setYearFilter('All');
+                              setPickFilter('All');
+                              setConditionFilter('All');
+                              setSearchQuery('');
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-750 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-2xs"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            <span>Reset Filters</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredNotes.map((note) => (
+                    <tr
                     key={note.id}
                     onClick={() => setInspectSpecimen(note)}
                     className="hover:bg-[#f1f5f9]/80 dark:hover:bg-blue-950/20 transition-colors cursor-pointer group"
@@ -935,7 +945,7 @@ export default function DashboardPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
@@ -947,19 +957,21 @@ export default function DashboardPage() {
 
             {/* Total info */}
             <div>
-              Showing 1 to {filteredNotes.length} of 18,700 notes
+              Showing {filteredNotes.length > 0 ? 1 : 0} to {filteredNotes.length} of {metrics.totalNotes} notes
             </div>
 
             {/* Pagination Controls */}
             <div className="flex items-center gap-1">
               <button
-                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                disabled={true}
+                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50"
                 title="First page"
               >
                 <ChevronsLeft className="h-3.5 w-3.5" />
               </button>
               <button
-                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                disabled={true}
+                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50"
                 title="Previous page"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -968,27 +980,17 @@ export default function DashboardPage() {
               <button className="h-7 w-7 rounded-lg bg-[#003399] text-white font-bold flex items-center justify-center shadow-xs">
                 1
               </button>
-              <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
-                2
-              </button>
-              <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
-                3
-              </button>
-              <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
-                4
-              </button>
-              <button className="h-7 w-7 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium flex items-center justify-center">
-                5
-              </button>
 
               <button
-                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                disabled={true}
+                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50"
                 title="Next page"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
               <button
-                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                disabled={true}
+                className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50"
                 title="Last page"
               >
                 <ChevronsRight className="h-3.5 w-3.5" />
@@ -1134,5 +1136,13 @@ export default function DashboardPage() {
       />
 
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-500">Loading Dashboard...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }

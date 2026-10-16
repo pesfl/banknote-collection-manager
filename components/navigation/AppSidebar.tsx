@@ -45,7 +45,6 @@ const NAV_ITEMS: NavItem[] = [
     name: 'Countries',
     href: '/countries',
     icon: Globe,
-    badge: 'Soon',
   },
   {
     name: 'New Entries',

@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       banknotes,
+      items: banknotes,
       count: banknotes.length,
       source: 'database',
     });
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       banknotes: [],
+      items: [],
       count: 0,
       offline: true,
       message: 'Database offline or not yet connected',
@@ -157,3 +159,33 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * DELETE /api/banknotes
+ * Clears all banknotes (or a specific banknote if ?id=... provided)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (id) {
+      await prisma.banknote.delete({ where: { id } });
+      return NextResponse.json({ success: true, message: `Banknote ${id} deleted` });
+    }
+
+    const { count } = await prisma.banknote.deleteMany({});
+    return NextResponse.json({
+      success: true,
+      deletedCount: count,
+      message: 'All banknotes cleared',
+    });
+  } catch (error: any) {
+    console.error('[Banknotes API] DELETE error:', error);
+    return NextResponse.json(
+      { error: error?.message || 'Failed to delete banknote(s)' },
+      { status: 500 }
+    );
+  }
+}
+

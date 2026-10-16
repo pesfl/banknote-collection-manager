@@ -39,6 +39,8 @@ import { toast } from 'sonner';
 import PhotoAdjusterModal from '@/components/mobile/PhotoAdjusterModal';
 import { cleanBanknoteImage, ensureImageBlob } from '@/lib/media/banknote-cleaner';
 import { getSpecimen, updateSpecimen } from '@/lib/offline/idb';
+import { MultiSourceValuationCard } from './MultiSourceValuationCard';
+import { HistoricalValuationTrendChart } from './HistoricalValuationTrendChart';
 
 interface BanknoteDetailViewProps {
   banknote: Banknote;
@@ -888,86 +890,51 @@ export default function BanknoteDetailView({
         {/* CATEGORY 5: VALUATION & SALES CONSENSUS                                 */}
         {/* ----------------------------------------------------------------------- */}
         {(activeTab === 'all' || activeTab === 'valuation') && (
-          <div className="bg-white dark:bg-[#0b132b] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  Valuation Consensus & Marketplace Activity
-                </h3>
-              </div>
-              <span className="text-[11px] text-slate-400">Harmonized from PMG, Numista, & completed eBay sales</span>
-            </div>
+          <div className="space-y-4">
+            <MultiSourceValuationCard
+              banknoteId={banknote.id}
+              banknoteData={{
+                countryOfOrigin: banknote.countryOfOrigin,
+                denomination: banknote.denomination,
+                currency: banknote.currency,
+                pickNumber: banknote.pickNumber,
+                issueYear: banknote.issueYear,
+                conditionGrade: banknote.conditionGrade,
+                isReplacementNote: banknote.isReplacementNote,
+                fancySerialType: banknote.fancySerialType,
+                collectorMarketValue: banknote.collectorMarketValue,
+                numistaPmgValue: banknote.numistaPmgValue,
+                purchasePrice: banknote.purchasePrice,
+              }}
+              onValuationUpdated={(newVal) => {
+                const updated: Banknote = {
+                  ...banknote,
+                  collectorMarketValue: newVal.collectorMarketValue,
+                  numistaPmgValue: `${newVal.pmgValue || '—'} / ${newVal.numistaValue || '—'}`,
+                  pmgValue: newVal.pmgValue,
+                  heritageValue: newVal.heritageValue,
+                  stacksBowersValue: newVal.stacksBowersValue,
+                  ebayValue: newVal.ebayValue || newVal.ebayLastSold,
+                  numistaValue: newVal.numistaValue,
+                  banknoteArchivesValue: newVal.banknoteArchivesValue,
+                } as any;
+                onSpecimenUpdated?.(updated);
+              }}
+            />
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {/* PMG Catalog */}
-              <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40">
-                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
-                  🏛️ PMG CATALOG
-                </span>
-                <div className="text-base font-black font-mono text-slate-900 dark:text-white mt-1">
-                  {(banknote as any).pmgValue || (banknote.numistaPmgValue?.split('/')?.[0]?.trim()) || '—'}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Catalog Anchor</div>
-              </div>
+            <HistoricalValuationTrendChart
+              banknoteId={banknote.id || ''}
+              purchasePrice={banknote.purchasePrice}
+              acquisitionDate={banknote.acquisitionDate}
+              currentValue={banknote.collectorMarketValue}
+            />
 
-              {/* Numista Value */}
-              <div className="p-3 rounded-xl bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200/60 dark:border-cyan-900/40">
-                <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider block">
-                  🪙 NUMISTA
-                </span>
-                <div className="text-base font-black font-mono text-cyan-600 dark:text-cyan-300 mt-1">
-                  {(banknote as any).numistaValue || (banknote.numistaPmgValue?.split('/')?.[1]?.trim()) || '—'}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Community Curve</div>
+            <div className="bg-white dark:bg-[#0b132b] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <FieldBox label="Original Purchase Price" value={banknote.purchasePrice ? `$${banknote.purchasePrice.toFixed(2)}` : undefined} onCopy={handleCopy} />
+                <FieldBox label="Estimated Value Gain/Loss" value={profitLoss ? `${profitLoss.isPositive ? '+' : '-'}$${Math.abs(profitLoss.diff).toFixed(2)} (${profitLoss.percent}%)` : undefined} highlight onCopy={handleCopy} />
+                <FieldBox label="Live Active Listings" value={(banknote as any).ebayActiveUrl ? 'Available on eBay ↗' : 'Search Active'} onCopy={handleCopy} />
               </div>
-
-              {/* eBay Last Sold */}
-              <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
-                    🛒 EBAY SOLD
-                  </span>
-                  {(banknote as any).ebaySoldUrl && (
-                    <a
-                      href={(banknote as any).ebaySoldUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-500 hover:text-blue-400"
-                      title="View sold listings"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                </div>
-                <div className="text-base font-black font-mono text-amber-600 dark:text-amber-300 mt-1">
-                  {(banknote as any).ebayLastSold || '—'}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  {(banknote as any).ebaySoldUrl ? (
-                    <a href={(banknote as any).ebaySoldUrl} target="_blank" rel="noreferrer" className="text-blue-500 underline">
-                      View Sold Listings ↗
-                    </a>
-                  ) : 'Market Completed'}
-                </div>
-              </div>
-
-              {/* Collector Market Consensus */}
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
-                  💎 MARKET CONSENSUS
-                </span>
-                <div className="text-base font-black font-mono text-emerald-600 dark:text-emerald-300 mt-1">
-                  {banknote.collectorMarketValue || '—'}
-                </div>
-                <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">Condition Weighted</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-              <FieldBox label="Original Purchase Price" value={banknote.purchasePrice ? `$${banknote.purchasePrice.toFixed(2)}` : undefined} onCopy={handleCopy} />
-              <FieldBox label="Estimated Value Gain/Loss" value={profitLoss ? `${profitLoss.isPositive ? '+' : '-'}$${Math.abs(profitLoss.diff).toFixed(2)} (${profitLoss.percent}%)` : undefined} highlight onCopy={handleCopy} />
-              <FieldBox label="Live Active Listings" value={(banknote as any).ebayActiveUrl ? 'Available on eBay ↗' : 'Search Active'} onCopy={handleCopy} />
             </div>
           </div>
         )}

@@ -6,165 +6,7 @@ import BanknoteListView from '@/components/banknote/BanknoteListView';
 import type { Banknote } from '@/types';
 import { getAllSpecimens } from '@/lib/offline/idb';
 import ComingSoonFeature from '@/components/common/ComingSoonFeature';
-
-const MOCK_BANKNOTES: Banknote[] = [
-  {
-    id: 'BN-000142',
-    userId: 'user1',
-    countryOfOrigin: 'Canada',
-    denomination: '1,000 Dollars',
-    currency: 'Canadian Dollar',
-    pickNumber: 'P-45a',
-    issueYear: '1954',
-    seriesDate: '1954',
-    fullSerialNumber: 'A1234567',
-    serialPrefix: 'A',
-    serialNumeric: '1234567',
-    serialSuffix: '',
-    signature1Name: 'Beattie',
-    signature1Title: 'Deputy Governor',
-    signature2Name: 'Coyne',
-    signature2Title: 'Governor',
-    watermarks: 'Queen Elizabeth II',
-    securityFeatures: 'Thread, Hologram, Intaglio ink',
-    conditionGrade: 'UNC' as const,
-    machineEstimatedGrade: 'UNC' as const,
-    fancySerialType: 'None' as const,
-    isReplacementNote: false,
-    storageBox: 'Box A',
-    storageSection: 'Section 1',
-    storagePosition: 'Position 1',
-    frontImageUrl: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=600&auto=format&fit=crop&q=60',
-    backImageUrl: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=600&auto=format&fit=crop&q=60',
-    displayImageUrl: 'https://images.unsplash.com/photo-1621972750749-0fbb1abb7736?w=600&auto=format&fit=crop&q=60',
-    notes: 'Great color and eye appeal. Original crisp paper with excellent margins.',
-    defectsAndAnomalies: 'None',
-    numistaPmgValue: '$2,450.00',
-    collectorMarketValue: '$2,750.00',
-    acquisitionDate: new Date('2025-08-26'),
-    acquisitionSource: 'Heritage Auctions',
-    purchasePrice: 2300,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: 'BN-000143',
-    userId: 'user1',
-    countryOfOrigin: 'Brazil',
-    denomination: '100 Cruzados',
-    currency: 'Cruzados',
-    pickNumber: 'P-211c',
-    issueYear: '1986',
-    seriesDate: '1986',
-    fullSerialNumber: '97.151.001 C',
-    serialPrefix: '97',
-    serialNumeric: '151001',
-    serialSuffix: 'C',
-    signature1Name: 'Funaro',
-    signature1Title: 'Minister of Finance',
-    signature2Name: 'Sayad',
-    signature2Title: 'Central Bank President',
-    watermarks: 'Effigy of Republic',
-    securityFeatures: 'Microprinting, Security thread',
-    conditionGrade: 'UNC' as const,
-    machineEstimatedGrade: 'UNC' as const,
-    fancySerialType: 'None' as const,
-    isReplacementNote: false,
-    storageBox: 'Box 01',
-    storageSection: 'Section A',
-    storagePosition: 'Position 23',
-    frontImageUrl: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=600&auto=format&fit=crop&q=60',
-    backImageUrl: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=600&auto=format&fit=crop&q=60',
-    displayImageUrl: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=600&auto=format&fit=crop&q=60',
-    notes: 'Crisp uncirculated specimen from original 100-note bank bundle.',
-    defectsAndAnomalies: 'None',
-    numistaPmgValue: '$15.00',
-    collectorMarketValue: '$16.00',
-    acquisitionDate: new Date('2026-02-10'),
-    acquisitionSource: 'Collector Exchange',
-    purchasePrice: 10,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: 'BN-000144',
-    userId: 'user1',
-    countryOfOrigin: 'United States',
-    denomination: '$100',
-    currency: 'US Dollar',
-    pickNumber: 'P-540',
-    issueYear: '2013',
-    seriesDate: '2013',
-    fullSerialNumber: 'L12345678A',
-    serialPrefix: 'L',
-    serialNumeric: '12345678',
-    serialSuffix: 'A',
-    signature1Name: 'Jacob Lew',
-    signature1Title: 'Secretary of Treasury',
-    signature2Name: 'Ben Bernanke',
-    signature2Title: 'Federal Reserve Chair',
-    watermarks: 'Benjamin Franklin',
-    securityFeatures: '3D Security Ribbon, Bell in Inkwell',
-    conditionGrade: 'AU' as const,
-    machineEstimatedGrade: 'AU' as const,
-    fancySerialType: 'Ladder' as const,
-    isReplacementNote: false,
-    storageBox: 'Box B',
-    storageSection: 'Section 2',
-    storagePosition: 'Position 05',
-    frontImageUrl: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=600&auto=format&fit=crop&q=60',
-    backImageUrl: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=600&auto=format&fit=crop&q=60',
-    displayImageUrl: 'https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?w=600&auto=format&fit=crop&q=60',
-    notes: 'Bright, crisp note with vibrant colors. Minimal handling.',
-    defectsAndAnomalies: 'Light handling crease',
-    numistaPmgValue: '$125.00',
-    collectorMarketValue: '$145.00',
-    acquisitionDate: new Date('2024-11-15'),
-    acquisitionSource: 'Dealer Direct',
-    purchasePrice: 120,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: 'BN-000145',
-    userId: 'user1',
-    countryOfOrigin: 'Bolivia',
-    denomination: '10 Bolivianos',
-    currency: 'Boliviano',
-    pickNumber: 'P-327c',
-    issueYear: '1986',
-    seriesDate: '1986',
-    fullSerialNumber: '87654321',
-    serialPrefix: '',
-    serialNumeric: '87654321',
-    serialSuffix: '',
-    signature1Name: 'Funaro',
-    signature1Title: 'Signatory A',
-    signature2Name: 'Sayad',
-    signature2Title: 'Signatory B',
-    watermarks: 'Type 2 Watermark',
-    securityFeatures: 'Security Thread',
-    conditionGrade: 'AU' as const,
-    machineEstimatedGrade: 'AU' as const,
-    fancySerialType: 'Ladder' as const,
-    isReplacementNote: false,
-    storageBox: 'Box C',
-    storageSection: 'Section 3',
-    storagePosition: 'Position 10',
-    frontImageUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=60',
-    backImageUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=60',
-    displayImageUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=60',
-    notes: 'Reverse ladder fancy serial. Discrepancy logged between PMG P-327b and Numista P-327c.',
-    defectsAndAnomalies: 'Minor corner crease',
-    numistaPmgValue: '$35.00',
-    collectorMarketValue: '$45.00',
-    acquisitionDate: new Date('2025-01-20'),
-    acquisitionSource: 'Online Auction',
-    purchasePrice: 35,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
+const MOCK_BANKNOTES: Banknote[] = [];
 
 function BanknotesInventoryContent() {
   const searchParams = useSearchParams();
@@ -177,7 +19,7 @@ function BanknotesInventoryContent() {
   if (view === 'missing') return <ComingSoonFeature type="missing" />;
   if (view === 'recent' || view === 'recently-added') return <ComingSoonFeature type="recently-added" />;
 
-  const [banknotes, setBanknotes] = useState<Banknote[]>(MOCK_BANKNOTES);
+  const [banknotes, setBanknotes] = useState<Banknote[]>([]);
   const [sortBy, setSortBy] = useState<'recent' | 'country' | 'value'>('recent');
 
   useEffect(() => {
@@ -273,11 +115,46 @@ function BanknotesInventoryContent() {
                     } as any);
                   }
                 }
+
+                // Automatically push any existing local notes up to Neon PostgreSQL cloud
+                const cloudBanknoteIds = new Set(cloudData.banknotes.map((b: any) => b.id));
+                const unSynced = local.filter((l: any) => !cloudBanknoteIds.has(l.id));
+                if (unSynced.length > 0) {
+                  const toUpload = unSynced.map((l: any) => {
+                    const ex = (l.extractedData || {}) as any;
+                    return {
+                      id: l.id,
+                      countryOfOrigin: ex.countryOfOrigin || ex.country,
+                      denomination: ex.denomination,
+                      currency: ex.currency,
+                      pickNumber: ex.pickNumber,
+                      issueYear: ex.issueYear,
+                      seriesDate: ex.seriesDate,
+                      fullSerialNumber: ex.fullSerialNumber,
+                      serialPrefix: ex.serialPrefix,
+                      serialNumeric: ex.serialNumeric,
+                      serialSuffix: ex.serialSuffix,
+                      conditionGrade: ex.conditionGrade,
+                      machineEstimatedGrade: ex.machineEstimatedGrade,
+                      fancySerialType: ex.fancySerialType,
+                      isReplacementNote: ex.isReplacementNote,
+                      notes: ex.notes || l.notes,
+                      collectorMarketValue: ex.collectorMarketValue || ex.valuation?.collectorMarketValue,
+                      numistaPmgValue: ex.numistaPmgValue || ex.numistaValue,
+                      extractedData: ex,
+                    };
+                  });
+                  fetch('/api/banknotes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(toUpload),
+                  }).catch(() => {});
+                }
               }
             }
           } catch {}
 
-          setBanknotes([...mappedLocal, ...MOCK_BANKNOTES]);
+          setBanknotes(mappedLocal);
         } else {
           // If local IDB is empty, attempt to hydrate from Cloud PostgreSQL
           try {
@@ -308,10 +185,16 @@ function BanknotesInventoryContent() {
                   createdAt: new Date(cb.createdAt || Date.now()),
                   updatedAt: new Date(cb.updatedAt || Date.now()),
                 } as any));
-                setBanknotes([...cloudMapped, ...MOCK_BANKNOTES]);
+                setBanknotes(cloudMapped);
+              } else {
+                setBanknotes([]);
               }
+            } else {
+              setBanknotes([]);
             }
-          } catch {}
+          } catch {
+            setBanknotes([]);
+          }
         }
       } catch (err) {
         console.error('Error querying local specimens:', err);
@@ -347,6 +230,7 @@ function BanknotesInventoryContent() {
       banknotes={sortedBanknotes}
       isLoading={false}
       onSort={setSortBy}
+      initialCountry={searchParams.get('country') || undefined}
       onSpecimenUpdated={(updated) => {
         setBanknotes(prev => prev.map(b => b.id === updated.id ? updated : b));
       }}

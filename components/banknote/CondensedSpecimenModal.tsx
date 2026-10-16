@@ -16,6 +16,8 @@ import { cleanBanknoteImage, ensureImageBlob } from '@/lib/media/banknote-cleane
 import { getSpecimen, updateSpecimen, deleteSpecimen } from '@/lib/offline/idb';
 import { resolveBanknoteValuation } from '@/lib/valuation/valuation-service';
 import { getCountryFlag } from '@/lib/ai/background-queue';
+import { MultiSourceValuationCard } from './MultiSourceValuationCard';
+import { HistoricalValuationTrendChart } from './HistoricalValuationTrendChart';
 
 export interface ExtendedBanknote extends Banknote {
   pmgValue?: string;
@@ -560,105 +562,52 @@ export default function CondensedSpecimenModal({
             </div>
           </div>
 
-          {/* Multi-Source Valuation Matrix */}
-          <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 text-white space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold tracking-tight text-white flex items-center gap-1.5">
-                    Multi-Source Valuation Matrix
-                    <span className="text-[10px] font-medium px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      Live Consensus
-                    </span>
-                  </h4>
-                  <p className="text-[10px] text-slate-400">Harmonized from PMG World Paper Money, Numista, & completed eBay sales</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleRefreshValuation}
-                disabled={isRefreshingValuation}
-                className="px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-800/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                title="Re-query valuation engine"
-              >
-                <RefreshCw className={`h-3 w-3 ${isRefreshingValuation ? 'animate-spin' : ''}`} />
-                <span>{isRefreshingValuation ? 'Updating...' : 'Refresh Live'}</span>
-              </button>
-            </div>
+          {/* 5+1 Multi-Source Valuation Matrix & Real-time Reconciler */}
+          <MultiSourceValuationCard
+            banknoteId={activeSpecimen.id}
+            banknoteData={{
+              countryOfOrigin: activeSpecimen.countryOfOrigin,
+              denomination: activeSpecimen.denomination,
+              currency: activeSpecimen.currency,
+              pickNumber: activeSpecimen.pickNumber,
+              issueYear: activeSpecimen.issueYear,
+              conditionGrade: activeSpecimen.conditionGrade,
+              isReplacementNote: activeSpecimen.isReplacementNote,
+              fancySerialType: activeSpecimen.fancySerialType,
+              collectorMarketValue: activeSpecimen.collectorMarketValue,
+              numistaPmgValue: activeSpecimen.numistaPmgValue,
+              purchasePrice: activeSpecimen.purchasePrice,
+            }}
+            onValuationUpdated={(newVal) => {
+              setActiveSpecimen((prev: any) => ({
+                ...prev,
+                collectorMarketValue: newVal.collectorMarketValue,
+                numistaPmgValue: `${newVal.pmgValue || '—'} / ${newVal.numistaValue || '—'}`,
+                pmgValue: newVal.pmgValue,
+                heritageValue: newVal.heritageValue,
+                stacksBowersValue: newVal.stacksBowersValue,
+                ebayValue: newVal.ebayValue || newVal.ebayLastSold,
+                numistaValue: newVal.numistaValue,
+                banknoteArchivesValue: newVal.banknoteArchivesValue,
+                ebayLastSold: newVal.ebayLastSold,
+                ebaySoldUrl: newVal.ebaySoldUrl,
+              }));
+              if (onSpecimenUpdated) {
+                onSpecimenUpdated({
+                  ...activeSpecimen,
+                  collectorMarketValue: newVal.collectorMarketValue,
+                });
+              }
+            }}
+          />
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {/* 1. PMG Catalog */}
-              <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-800">
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                  <span>🏛️ PMG Catalog</span>
-                </div>
-                <div className="text-sm font-bold font-mono text-slate-200">
-                  {(activeSpecimen as any).pmgValue || (activeSpecimen.numistaPmgValue?.split('/')?.[0]?.trim()) || '—'}
-                </div>
-                <div className="text-[9px] text-slate-400 mt-0.5">Catalog Anchor</div>
-              </div>
-
-              {/* 2. Numista Value */}
-              <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-800">
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                  <span>🪙 Numista</span>
-                </div>
-                <div className="text-sm font-bold font-mono text-cyan-300">
-                  {(activeSpecimen as any).numistaValue || (activeSpecimen.numistaPmgValue?.split('/')?.[1]?.trim()) || '—'}
-                </div>
-                <div className="text-[9px] text-slate-400 mt-0.5">Community Curve</div>
-              </div>
-
-              {/* 3. eBay Last Sold */}
-              <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-800">
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                  <span>🛒 eBay Last Sold</span>
-                  {(activeSpecimen as any).ebaySoldUrl && (
-                    <a
-                      href={(activeSpecimen as any).ebaySoldUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-400 hover:text-blue-300 transition-colors"
-                      title="View completed sold listings on eBay"
-                    >
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  )}
-                </div>
-                <div className="text-sm font-bold font-mono text-blue-400">
-                  {(activeSpecimen as any).ebayLastSold ? (
-                    (activeSpecimen as any).ebayLastSold
-                  ) : (activeSpecimen as any).ebaySoldUrl ? (
-                    <a
-                      href={(activeSpecimen as any).ebaySoldUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300 underline"
-                    >
-                      Check Sold ↗
-                    </a>
-                  ) : (
-                    '—'
-                  )}
-                </div>
-                <div className="text-[9px] text-slate-400 mt-0.5">Live Marketplace Search</div>
-              </div>
-
-              {/* 4. Market Consensus */}
-              <div className="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-500/40">
-                <div className="flex items-center justify-between text-[10px] text-emerald-300 mb-1">
-                  <span className="font-semibold">💎 Market Consensus</span>
-                </div>
-                <div className="text-sm font-extrabold font-mono text-emerald-400">
-                  {activeSpecimen.collectorMarketValue || '—'}
-                </div>
-                <div className="text-[9px] text-emerald-300/80 mt-0.5">Condition Weighted</div>
-              </div>
-            </div>
-          </div>
+          {/* Historical Valuation Trend & Date-Stamped Logs */}
+          <HistoricalValuationTrendChart
+            banknoteId={activeSpecimen.id || ''}
+            purchasePrice={activeSpecimen.purchasePrice}
+            acquisitionDate={activeSpecimen.acquisitionDate}
+            currentValue={activeSpecimen.collectorMarketValue}
+          />
 
           {/* 4-Column Metric Strip (Condition, Quantity, Estimated Value, Special Tag) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs">

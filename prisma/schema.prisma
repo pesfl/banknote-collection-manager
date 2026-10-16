@@ -139,6 +139,12 @@ model Banknote {
   numistaPmgValue    String?
   collectorMarketValue String?
   valuationStatus    ValuationStatus @default(PENDING)
+  pmgValue           String?
+  heritageValue      String?
+  stacksBowersValue  String?
+  ebayValue          String?
+  numistaValue       String?
+  banknoteArchivesValue String?
 
   // Acquisition
   acquisitionDate    DateTime?
@@ -239,12 +245,14 @@ model ValuationLog {
   stacksBowersValue String?
   ebayValue     String?
   numistaValue  String?
+  banknoteArchivesValue String?
 
   estimatedValue String?
   confidenceScore Float?
   conflictDetected Boolean @default(false)
 
   source        String   // "manual", "api_scrape", "average"
+  notes         String?
 
   createdAt     DateTime @default(now())
 

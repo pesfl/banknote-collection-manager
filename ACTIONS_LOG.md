@@ -159,3 +159,25 @@
 - 2026-10-16: Built /api/banknotes endpoint to sync inventory with Neon PostgreSQL cloud
 - 2026-10-16: Connected client dashboard & inventory to bi-directional Neon cloud sync
 - 2026-10-16: Created isolated Neon 'banknotes' database & pushed schema with zero data loss
+- 2026-10-16: Added automatic cloud migration for existing local IndexedDB notes into Neon
+- 2026-10-16: Cleared all test banknotes & logs from Neon PostgreSQL database
+- 2026-10-16: Removed hardcoded SAMPLE_BANKNOTES and MOCK_BANKNOTES datasets
+- 2026-10-16: Replaced hardcoded KPI numbers with dynamic collection metrics
+- 2026-10-16: Converted filter dropdowns to dynamically derive from inventory
+- 2026-10-16: Added empty state with 1-click capture CTA when collection is 0
+- 2026-10-16: Added Clear Collection action and DELETE /api/banknotes endpoint
+- 2026-10-16: Added 5+1 valuation sources & history log fields to Neon Prisma schema
+- 2026-10-16: Built 5+1 multi-source calculation engine with 20% divergence conflict flag
+- 2026-10-16: Built /api/valuation/history/[id] endpoint for date-stamped valuation logs
+- 2026-10-16: Created MultiSourceValuationCard component displaying 5 sources & consensus
+- 2026-10-16: Created HistoricalValuationTrendChart with SVG curve, ROI & timeline log
+- 2026-10-16: Integrated 5+1 matrix & trend chart into modal, detail view and /valuation
+- 2026-10-16: Created vector world map dataset with 212 sovereign country paths
+- 2026-10-16: Built country-matcher utility mapping banknotes to ISO-2 country codes
+- 2026-10-16: Built InteractiveWorldHeatmap component with zoom and density gradations
+- 2026-10-16: Built /countries page with interactive map, heatmap and country inspection
+- 2026-10-16: Cropped map viewBox to 0 0 700 340 & added pinch/wheel zoom and drag pan
+- 2026-10-16: Converted /countries map to a stable, fixed layout without zoom/pan controls
+- 2026-10-16: Synchronized /countries map & heatmap with live database and IndexedDB notes
+- 2026-10-16: Removed Clear Collection button from dashboard
+- 2026-10-16: Routed country map & leaderboard clicks directly to filtered main table

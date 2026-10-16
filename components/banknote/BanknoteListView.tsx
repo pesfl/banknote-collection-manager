@@ -38,6 +38,7 @@ interface BanknoteListViewProps {
   onSort?: (sort: 'recent' | 'country' | 'value') => void;
   onFilter?: (filter: string) => void;
   onSpecimenUpdated?: (updated: Banknote) => void;
+  initialCountry?: string;
 }
 
 export default function BanknoteListView({
@@ -46,14 +47,22 @@ export default function BanknoteListView({
   onSort,
   onFilter,
   onSpecimenUpdated,
+  initialCountry,
 }: BanknoteListViewProps) {
   const [sortBy, setSortBy] = useState<'recent' | 'country' | 'value'>('recent');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchInput, setShowSearchInput] = useState(false);
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(Boolean(initialCountry));
+  const [selectedCountry, setSelectedCountry] = useState<string>(initialCountry || 'ALL');
   const [selectedGrade, setSelectedGrade] = useState<string>('ALL');
   const [activeSpecimen, setActiveSpecimen] = useState<Banknote | null>(null);
+
+  useEffect(() => {
+    if (initialCountry) {
+      setSelectedCountry(initialCountry);
+      setShowFilterDropdown(true);
+    }
+  }, [initialCountry]);
 
 
   // Synchronize activeSpecimen when parent banknotes collection updates
