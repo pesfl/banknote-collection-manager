@@ -181,3 +181,6 @@
 - 2026-10-16: Synchronized /countries map & heatmap with live database and IndexedDB notes
 - 2026-10-16: Removed Clear Collection button from dashboard
 - 2026-10-16: Routed country map & leaderboard clicks directly to filtered main table
+
+## 2026-10-17
+- 2026-10-17: Added prisma generate to build and postinstall scripts to fix Vercel deploy
